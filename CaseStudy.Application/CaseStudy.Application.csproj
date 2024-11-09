@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="AutoMapper" Version="13.0.1" />
+		<PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
+		<PackageReference Include="MailKit" Version="4.8.0" />
+		<PackageReference Include="MimeKit" Version="4.8.0" />
+		<PackageReference Include="ServiceStack" Version="8.4.0" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.1.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\CaseStudy.DataAccess\CaseStudy.DataAccess.csproj" />
+	</ItemGroup>
+
+</Project>
