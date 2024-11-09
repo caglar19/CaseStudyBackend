@@ -4,12 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
-using CaseStudy.Core.Entities;
-using CaseStudy.DataAccess.Common;
-using CaseStudy.DataAccess.Common.Impl;
 using CaseStudy.DataAccess.Persistence;
-using CaseStudy.DataAccess.Repositories;
-using CaseStudy.DataAccess.Repositories.Impl;
 
 namespace CaseStudy.DataAccess;
 
@@ -29,8 +24,7 @@ public static class DataAccessDependencyInjection
 
     private static void AddRepositories(this IServiceCollection services)
     {
-        services.AddScoped<IHolidayRepository, HolidayRepository>();
-        services.AddScoped<IUserRepository, UserRepository>();
+       
     }
 
     private static void AddDatabase(this IServiceCollection services, IConfiguration configuration)
@@ -44,15 +38,13 @@ public static class DataAccessDependencyInjection
         //        options.ConfigureWarnings(x => x.Ignore(InMemoryEventId.TransactionIgnoredWarning));
         //    });
         //else
-        services.AddDbContext<DatabaseContext>(options =>
-                options.UseMySql(databaseConfig.ConnectionString, ServerVersion.AutoDetect(databaseConfig.ConnectionString)));
+        //services.AddDbContext<DatabaseContext>(options =>
+        //        options.UseMySql(databaseConfig.ConnectionString, ServerVersion.AutoDetect(databaseConfig.ConnectionString)));
     }
 
     private static void AddIdentity(this IServiceCollection services)
     {
-        services.AddIdentity<User, IdentityRole<int>>()
-            .AddEntityFrameworkStores<DatabaseContext>()
-            .AddDefaultTokenProviders();
+        
 
         services.Configure<IdentityOptions>(options =>
         {
@@ -75,16 +67,7 @@ public static class DataAccessDependencyInjection
 
     private static void AddMongo(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<MongoDbDatabaseSettings>(
-            configuration.GetSection(nameof(MongoDbDatabaseSettings)));
-        services.AddSingleton<IMongoDbDatabaseSettings>(sp =>
-            sp.GetRequiredService<IOptions<MongoDbDatabaseSettings>>().Value);
-
-        services.AddSingleton<IMongoClient, MongoClient>(sp =>
-        {
-            var settings = sp.GetRequiredService<IMongoDbDatabaseSettings>();
-            return new MongoClient(settings.ConnectionString);
-        });
+        
     }
 }
 

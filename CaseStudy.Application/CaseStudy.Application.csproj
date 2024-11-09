@@ -19,4 +19,9 @@
 	  <ProjectReference Include="..\CaseStudy.DataAccess\CaseStudy.DataAccess.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Helpers\" />
+	  <Folder Include="Models\Validators\Holiday\" />
+	</ItemGroup>
+
 </Project>
