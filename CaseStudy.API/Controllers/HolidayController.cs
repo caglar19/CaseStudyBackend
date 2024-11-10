@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using CaseStudy.Application.Models;
 using CaseStudy.Application.Models.Holiday;
 using CaseStudy.Application.Services;
-using CaseStudy.Application.Services.Impl;
-using static CaseStudy.Application.Services.Impl.HolidayService;
 
 namespace CaseStudy.API.Controllers;
 
@@ -13,50 +11,36 @@ namespace CaseStudy.API.Controllers;
 [AllowAnonymous]
 public class HolidayController(IHolidayService holidayService) : ControllerBase
 {
-    [HttpGet("countries")]
-    public async Task<IActionResult> GetCountryCodesAsync()
+    [HttpGet]
+    public async Task<IActionResult> GetCountryAsync()
     {
-        var result = await holidayService.GetCountryCodesAsync();
-        return Ok(ApiResult<List<string>>.Success(result, result.Count));
+        var result = await holidayService.GetCountryAsync();
+        return Ok(ApiResult<List<CountryResponseModel>>.Success(result, result.Count));
     }
 
-    [HttpGet("languages")]
-    public async Task<IActionResult> GetLanguagesAsync()
+    [HttpGet]
+    public async Task<IActionResult> GetSubdivisionAsync([FromQuery] SubdivisionRequestModel model)
     {
-        var result = await holidayService.GetLanguagesAsync();
+        var result = await holidayService.GetSubdivisionAsync(model);
 
-        return Ok(ApiResult<List<LanguageWithCode>>.Success(result, result.Count));
+        return Ok(ApiResult<List<SubdivisionResponseModel>>.Success(result, result.Count));
     }
 
-    [HttpGet("subdivisions")]
-    public async Task<IActionResult> GetSubdivisionsAsync([FromQuery] string countryIsoCode, [FromQuery] string languageIsoCode)
+    [HttpGet]
+    public async Task<IActionResult> GetHolidayAsync([FromQuery] HolidayRequestModel model)
     {
-        var result = await holidayService.GetSubdivisionsAsync(countryIsoCode, languageIsoCode);
+        List<HolidayResponseModel> result = new List<HolidayResponseModel>();
+        
+        if (model.HolidayType.Any(k=> k == HolidayType.Public))
+        {
+            result.AddRange(await holidayService.GetPublicHolidayAsync(model));
+        }
 
-        return Ok(ApiResult<List<Subdivision>>.Success(result, result.Count));
-    }
-
-    [HttpGet("public-holidays")]
-    public async Task<IActionResult> GetPublicHolidaysAsync(
-    [FromQuery] string countryIsoCode,
-    [FromQuery] string languageIsoCode,
-    [FromQuery] DateTime validFrom,
-    [FromQuery] DateTime validTo,
-    [FromQuery] string subdivisionCode)
-    {
-        var result = await holidayService.GetPublicHolidaysAsync(countryIsoCode, languageIsoCode, validFrom, validTo, subdivisionCode);
+        if (model.HolidayType.Any(k => k == HolidayType.School))
+        {
+            result.AddRange(await holidayService.GetSchoolHolidayAsync(model));
+        }
+        
         return Ok(ApiResult<List<HolidayResponseModel>>.Success(result, result.Count));
     }
-    [HttpGet("school-holidays")]
-    public async Task<IActionResult> GetSchoolHolidaysAsync(
-    [FromQuery] string countryIsoCode,
-    [FromQuery] string languageIsoCode,
-    [FromQuery] DateTime validFrom,
-    [FromQuery] DateTime validTo,
-    [FromQuery] string subdivisionCode)
-    {
-        var result = await holidayService.GetSchoolHolidaysAsync(countryIsoCode, languageIsoCode, validFrom, validTo, subdivisionCode);
-        return Ok(ApiResult<List<SchoolHolidayResponseModel>>.Success(result, result.Count));
-    }
-
 }

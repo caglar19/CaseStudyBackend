@@ -14,6 +14,7 @@ builder.Services.AddApplication();
 builder.Services.AddSwagger();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
+builder.Services.Configure<RouteOptions>(options => options.LowercaseUrls = true); 
 
 var app = builder.Build();
 

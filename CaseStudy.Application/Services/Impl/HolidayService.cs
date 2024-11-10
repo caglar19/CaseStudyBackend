@@ -3,20 +3,11 @@ using System.Net.Http.Json;
 
 namespace CaseStudy.Application.Services.Impl;
 
-public class HolidayService : IHolidayService
+public class HolidayService(HttpClient httpClient) : IHolidayService
 {
-    private readonly HttpClient _httpClient;
-
-    public HolidayService(
-        HttpClient httpClient)
+    public async Task<List<CountryResponseModel>> GetCountryAsync()
     {
-        _httpClient = httpClient;
-    }
-
-
-    public async Task<List<string>> GetCountryCodesAsync()
-    {
-        var response = await _httpClient.GetAsync("https://openholidaysapi.org/Countries");
+        var response = await httpClient.GetAsync("https://openholidaysapi.org/Countries");
 
         if (!response.IsSuccessStatusCode)
         {
@@ -26,48 +17,23 @@ public class HolidayService : IHolidayService
         var countries = await response.Content.ReadFromJsonAsync<List<Country>>();
 
         if (countries == null)
-            return new List<string>();
+            return [];
 
         // Ülke kodlarını (isoCode) döndür
-        var countryCodes = countries.Select(c => c.IsoCode).ToList();
+        var countryCodes = countries
+            .Select(country => new CountryResponseModel
+            {
+                Id = Guid.NewGuid(),
+                IsoCode = country.IsoCode,
+                Name = country.Name.First(name => name.Language == "EN").Text,
+            })
+            .ToList();
         return countryCodes;
     }
-
-    public async Task<List<LanguageWithCode>> GetLanguagesAsync()
+    public async Task<List<SubdivisionResponseModel>> GetSubdivisionAsync(SubdivisionRequestModel model)
     {
-        var response = await _httpClient.GetAsync("https://openholidaysapi.org/Languages");
-
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new Exception("Failed to retrieve languages from external API");
-        }
-
-        // JSON'dan dil verilerini çeviriyoruz
-        var languages = await response.Content.ReadFromJsonAsync<List<Language>>();
-
-        // Eğer veriler null ise boş bir liste döndür
-        if (languages == null)
-        {
-            return new List<LanguageWithCode>();
-        }
-
-        // Burada her dilin isoCode'u ve İngilizce adını alıyoruz
-        var languageNames = languages
-            .Select(lang => new LanguageWithCode
-            {
-                IsoCode = lang.IsoCode,
-                Name = lang.Name.FirstOrDefault(name => name.Language == "EN")?.Text
-            })
-            .Where(lang => lang.Name != null) // Eğer İngilizce adı varsa listeye dahil et
-            .ToList();
-
-        return languageNames;
-    }
-
-    public async Task<List<Subdivision>> GetSubdivisionsAsync(string countryIsoCode, string languageIsoCode)
-    {
-        var url = $"https://openholidaysapi.org/Subdivisions?countryIsoCode={countryIsoCode}&languageIsoCode={languageIsoCode}";
-        var response = await _httpClient.GetAsync(url);
+        var url = $"https://openholidaysapi.org/Subdivisions?countryIsoCode={model.CountryIsoCode}&languageIsoCode={model.LanguageIsoCode}";
+        var response = await httpClient.GetAsync(url);
 
         // Eğer yanıt başarılı değilse hata fırlat
         if (!response.IsSuccessStatusCode)
@@ -78,40 +44,63 @@ public class HolidayService : IHolidayService
         // API yanıtını doğru türde okuyalım
         var subdivisions = await response.Content.ReadFromJsonAsync<List<Subdivision>>();
 
-        // Eğer dönüş null ise boş bir liste döndür
-        return subdivisions ?? new List<Subdivision>();
+        // Eğer null dönerse boş liste döndür
+        if (subdivisions == null)
+        {
+            return new List<SubdivisionResponseModel>();
+        }
+            
+        // SubdivisionResponseModel listesi oluştur
+        var subdivisionResponseModels = subdivisions
+            .Select(subdivision => new SubdivisionResponseModel
+            {
+                Id = Guid.NewGuid(),
+                Code = subdivision.Code,
+                IsoCode = subdivision.IsoCode,
+                ShortName = subdivision.ShortName,
+                LongName = subdivision.Name.First(name => name.Language == "EN").Text
+            })
+            .ToList();
+        
+        return subdivisionResponseModels;
     }
-    public async Task<List<HolidayResponseModel>> GetPublicHolidaysAsync(
-    string countryIsoCode,
-    string languageIsoCode,
-    DateTime validFrom,
-    DateTime validTo,
-    string subdivisionCode)
+    public async Task<List<HolidayResponseModel>> GetPublicHolidayAsync(HolidayRequestModel model)
     {
-        var url = $"https://openholidaysapi.org/PublicHolidays?countryIsoCode={countryIsoCode}&languageIsoCode={languageIsoCode}&validFrom={validFrom:yyyy-MM-dd}&validTo={validTo:yyyy-MM-dd}&subdivisionCode={subdivisionCode}";
+        var url = $"https://openholidaysapi.org/PublicHolidays?countryIsoCode={model.CountryIsoCode}&languageIsoCode=EN&validFrom={model.ValidFrom:yyyy-MM-dd}&validTo={model.ValidTo:yyyy-MM-dd}&subdivisionCode={model.SubdivisionCode}";
 
-        var response = await _httpClient.GetAsync(url);
+        var response = await httpClient.GetAsync(url);
 
         if (!response.IsSuccessStatusCode)
         {
             throw new Exception("Failed to retrieve public holidays from external API");
         }
 
-        var holidays = await response.Content.ReadFromJsonAsync<List<HolidayResponseModel>>();
-        return holidays ?? new List<HolidayResponseModel>();
+        var holidays = await response.Content.ReadFromJsonAsync<List<Holiday>>();
+        
+        if (holidays == null)
+        {
+            return new List<HolidayResponseModel>();
+        }
+        
+        var holidayResponseModels = holidays
+            .Select(holiday => new HolidayResponseModel
+            {
+                Id = Guid.NewGuid(),
+                StartDate = holiday.StartDate.ToString("yyyy-MM-dd"),
+                EndDate = holiday.EndDate.ToString("yyyy-MM-dd"),
+                Name = holiday.Name.First(name => name.Language == "EN").Text
+            })
+            .ToList();
+        
+        return holidayResponseModels;
     }
-    public async Task<List<SchoolHolidayResponseModel>> GetSchoolHolidaysAsync(
-     string countryIsoCode,
-     string languageIsoCode,
-     DateTime validFrom,
-     DateTime validTo,
-     string subdivisionCode)
+    public async Task<List<HolidayResponseModel>> GetSchoolHolidayAsync(HolidayRequestModel model)
     {
         // API URL'yi oluştur
-        var url = $"https://openholidaysapi.org/SchoolHolidays?countryIsoCode={countryIsoCode}&languageIsoCode={languageIsoCode}&validFrom={validFrom:yyyy-MM-dd}&validTo={validTo:yyyy-MM-dd}&subdivisionCode={subdivisionCode}";
+        var url = $"https://openholidaysapi.org/SchoolHolidays?countryIsoCode={model.CountryIsoCode}&languageIsoCode=EN&validFrom={model.ValidFrom:yyyy-MM-dd}&validTo={model.ValidTo:yyyy-MM-dd}&subdivisionCode={model.SubdivisionCode}";
 
         // API'ye GET isteği gönder
-        var response = await _httpClient.GetAsync(url);
+        var response = await httpClient.GetAsync(url);
 
         // Başarısız cevap durumunda hata fırlat
         if (!response.IsSuccessStatusCode)
@@ -120,10 +109,24 @@ public class HolidayService : IHolidayService
         }
 
         // API'den gelen JSON cevabını deserialize et
-        var schoolHolidays = await response.Content.ReadFromJsonAsync<List<SchoolHolidayResponseModel>>();
-
-        // Eğer null dönerse boş liste döndür
-        return schoolHolidays ?? new List<SchoolHolidayResponseModel>();
+        var schoolHolidays = await response.Content.ReadFromJsonAsync<List<Holiday>>();
+        
+        if (schoolHolidays == null)
+        {
+            return new List<HolidayResponseModel>();
+        }
+        
+        // SchoolHolidayResponseModel listesi oluştur
+        var schoolHolidayResponseModels = schoolHolidays
+            .Select(holiday => new HolidayResponseModel
+            {
+                Id = Guid.NewGuid(),
+                StartDate = holiday.StartDate.ToString("yyyy-MM-dd"),
+                EndDate = holiday.EndDate.ToString("yyyy-MM-dd"),
+                Name = holiday.Name.First(name => name.Language == "EN").Text
+            })
+            .ToList();
+        
+        return schoolHolidayResponseModels;
     }
-
 }
