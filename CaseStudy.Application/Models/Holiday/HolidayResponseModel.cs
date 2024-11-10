@@ -23,5 +23,5 @@ public class HolidayResponseModel
     public required Guid Id { get; set; }
     public required string StartDate { get; set; }
     public required string EndDate { get; set; }
-    public string Name { get; set; }
+    public string? Name { get; set; }
 }

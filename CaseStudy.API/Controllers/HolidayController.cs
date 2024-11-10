@@ -40,7 +40,12 @@ public class HolidayController(IHolidayService holidayService) : ControllerBase
         {
             result.AddRange(await holidayService.GetSchoolHolidayAsync(model));
         }
-        
+
+        result = result
+        .GroupBy(h => new { h.StartDate, h.EndDate, h.Name })
+        .Select(g => g.First())
+        .ToList();
+
         return Ok(ApiResult<List<HolidayResponseModel>>.Success(result, result.Count));
     }
 }

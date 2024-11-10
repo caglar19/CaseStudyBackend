@@ -25,14 +25,14 @@ public class HolidayService(HttpClient httpClient) : IHolidayService
             {
                 Id = Guid.NewGuid(),
                 IsoCode = country.IsoCode,
-                Name = country.Name.First(name => name.Language == "EN").Text,
+                Name = country.Name.Any(name => name.Language == "EN") ? country.Name.First(name => name.Language == "EN").Text : country.Name.FirstOrDefault()?.Text,
             })
             .ToList();
         return countryCodes;
     }
     public async Task<List<SubdivisionResponseModel>> GetSubdivisionAsync(SubdivisionRequestModel model)
     {
-        var url = $"https://openholidaysapi.org/Subdivisions?countryIsoCode={model.CountryIsoCode}&languageIsoCode={model.LanguageIsoCode}";
+        var url = $"https://openholidaysapi.org/Subdivisions?countryIsoCode={model.CountryIsoCode}&languageIsoCode=EN";
         var response = await httpClient.GetAsync(url);
 
         // Eğer yanıt başarılı değilse hata fırlat
@@ -56,9 +56,8 @@ public class HolidayService(HttpClient httpClient) : IHolidayService
             {
                 Id = Guid.NewGuid(),
                 Code = subdivision.Code,
-                IsoCode = subdivision.IsoCode,
                 ShortName = subdivision.ShortName,
-                LongName = subdivision.Name.First(name => name.Language == "EN").Text
+                LongName = subdivision.Name.Any(name => name.Language == "EN") ? subdivision.Name.First(name => name.Language == "EN").Text : subdivision.Name.FirstOrDefault()?.Text,
             })
             .ToList();
         
@@ -88,7 +87,7 @@ public class HolidayService(HttpClient httpClient) : IHolidayService
                 Id = Guid.NewGuid(),
                 StartDate = holiday.StartDate.ToString("yyyy-MM-dd"),
                 EndDate = holiday.EndDate.ToString("yyyy-MM-dd"),
-                Name = holiday.Name.First(name => name.Language == "EN").Text
+                Name = holiday.Name.Any(name => name.Language == "EN") ? holiday.Name.First(name => name.Language == "EN").Text : holiday.Name.FirstOrDefault()?.Text,
             })
             .ToList();
         
@@ -123,7 +122,7 @@ public class HolidayService(HttpClient httpClient) : IHolidayService
                 Id = Guid.NewGuid(),
                 StartDate = holiday.StartDate.ToString("yyyy-MM-dd"),
                 EndDate = holiday.EndDate.ToString("yyyy-MM-dd"),
-                Name = holiday.Name.First(name => name.Language == "EN").Text
+                Name = holiday.Name.Any(name => name.Language == "EN") ? holiday.Name.First(name => name.Language == "EN").Text : holiday.Name.FirstOrDefault()?.Text,
             })
             .ToList();
         
