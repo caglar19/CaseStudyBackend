@@ -14,6 +14,15 @@ builder.Services.AddApplication();
 builder.Services.AddSwagger();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAllOrigins", builder =>
+    {
+        builder.AllowAnyOrigin() // Tüm origin'lere izin ver
+               .AllowAnyMethod()
+               .AllowAnyHeader();
+    });
+});
 builder.Services.Configure<RouteOptions>(options => options.LowercaseUrls = true);
 builder.WebHost.UseUrls("https://localhost:5001");
 
@@ -31,6 +40,7 @@ app.UseCors(corsPolicyBuilder =>
         .AllowAnyMethod()
         .AllowAnyHeader()
 );
+app.UseCors("AllowAllOrigins"); // CORS middleware
 app.UseDeveloperExceptionPage(); // Geliþtirme ortamýnda hata sayfasý
 
 app.UseRouting();
