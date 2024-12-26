@@ -14,7 +14,8 @@ builder.Services.AddApplication();
 builder.Services.AddSwagger();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
-builder.Services.Configure<RouteOptions>(options => options.LowercaseUrls = true); 
+builder.Services.Configure<RouteOptions>(options => options.LowercaseUrls = true);
+builder.WebHost.UseUrls("https://localhost:5001");
 
 var app = builder.Build();
 
@@ -30,6 +31,7 @@ app.UseCors(corsPolicyBuilder =>
         .AllowAnyMethod()
         .AllowAnyHeader()
 );
+app.UseDeveloperExceptionPage(); // Geliþtirme ortamýnda hata sayfasý
 
 app.UseRouting();
 
