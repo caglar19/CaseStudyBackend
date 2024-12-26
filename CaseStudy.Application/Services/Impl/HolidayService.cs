@@ -1,12 +1,22 @@
 ﻿using CaseStudy.Application.Models.Holiday;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
 namespace CaseStudy.Application.Services.Impl;
 
 public class HolidayService(HttpClient httpClient) : IHolidayService
 {
-    public async Task<List<CountryResponseModel>> GetCountryAsync()
+    public async Task<List<CountryResponseModel>> GetCountryAsync(string accessToken)
     {
+        if (string.IsNullOrEmpty(accessToken))
+        {
+            throw new UnauthorizedAccessException("Access token is required.");
+        }
+
+        // Authorization başlığını ayarla
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        // API isteği yap
         var response = await httpClient.GetAsync("https://openholidaysapi.org/Countries");
 
         if (!response.IsSuccessStatusCode)
@@ -14,22 +24,27 @@ public class HolidayService(HttpClient httpClient) : IHolidayService
             throw new Exception("Failed to retrieve country codes from external API");
         }
 
+        // Yanıtı parse et
         var countries = await response.Content.ReadFromJsonAsync<List<Country>>();
 
-        if (countries == null)
-            return [];
+        if (countries == null || !countries.Any())
+            return new List<CountryResponseModel>();
 
-        // Ülke kodlarını (isoCode) döndür
+        // Ülke kodlarını dönüştür ve döndür
         var countryCodes = countries
             .Select(country => new CountryResponseModel
             {
                 Id = Guid.NewGuid(),
                 IsoCode = country.IsoCode,
-                Name = country.Name.Any(name => name.Language == "EN") ? country.Name.First(name => name.Language == "EN").Text : country.Name.FirstOrDefault()?.Text,
+                Name = country.Name.Any(name => name.Language == "EN")
+                    ? country.Name.First(name => name.Language == "EN").Text
+                    : country.Name.FirstOrDefault()?.Text,
             })
             .ToList();
+
         return countryCodes;
     }
+
     public async Task<List<SubdivisionResponseModel>> GetSubdivisionAsync(SubdivisionRequestModel model)
     {
         var url = $"https://openholidaysapi.org/Subdivisions?countryIsoCode={model.CountryIsoCode}&languageIsoCode=EN";

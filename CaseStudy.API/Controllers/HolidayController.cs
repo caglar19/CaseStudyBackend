@@ -61,18 +61,26 @@ public class HolidayController : ControllerBase
                 ClientSecret = "1q2w3e*"
             };
 
-            // Use the TokenService to generate the token
-            var accessToken = await _tokenService.GenerateTokenAsync(tokenRequest);
+                // Use the TokenService to generate the token
+                var accessToken = await _tokenService.GenerateTokenAsync(tokenRequest);
 
-            // If the token is missing, return an error
-            if (string.IsNullOrEmpty(accessToken))
-            {
-                return StatusCode(500, "Failed to retrieve access token");
+                // If the token is missing, return an error
+                if (string.IsNullOrEmpty(accessToken))
+                {
+                    return StatusCode(500, "Failed to retrieve access token");
+                }
+
+                // Call GetCountryAsync with the access token
+                var countryResult = await _holidayService.GetCountryAsync(accessToken);
+
+                // Return the result
+                return Ok(new
+                {
+                    Message = "Webhook handled successfully",
+                    Token = accessToken,
+                    Countries = countryResult
+                });
             }
-
-            // Successfully retrieved the token
-            return Ok(new { Message = "Webhook handled successfully", Token = accessToken });
-        }
         catch (Exception ex)
         {
             // Log and return a server error if an exception occurs
@@ -91,11 +99,14 @@ public class HolidayController : ControllerBase
 
         // Retrieve all available countries for holidays
         [HttpPost]
-        public async Task<IActionResult> GetCountryAsync()
+        public async Task<IActionResult> GetCountryAsync(string accessToken)
         {
             try
             {
-                var result = await _holidayService.GetCountryAsync();
+                // HolidayService içindeki metodu çağır
+                var result = await _holidayService.GetCountryAsync(accessToken);
+
+                // Sonucu API formatında döndür
                 return Ok(ApiResult<List<CountryResponseModel>>.Success(result, result.Count));
             }
             catch (Exception ex)
@@ -104,6 +115,7 @@ public class HolidayController : ControllerBase
                 return StatusCode(500, "Error retrieving countries");
             }
         }
+
 
         // Get subdivisions (regions) based on the request model
         [HttpGet]
