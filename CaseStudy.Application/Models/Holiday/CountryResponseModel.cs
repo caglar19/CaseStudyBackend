@@ -6,13 +6,13 @@ public class CountryName
     public required string Text { get; set; }
 }
 
-public class Country
+public class CountryHoliday
 {
     public required string IsoCode { get; set; }
     public required ICollection<CountryName> Name { get; set; }
 }
 
-public class CountryResponseModel
+public class CountryModel
 {
     public Guid Id { get; set; }
     public required string IsoCode { get; set; }

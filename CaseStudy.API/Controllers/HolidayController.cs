@@ -142,7 +142,7 @@ namespace CaseStudy.API.Controllers
                 var result = await _holidayService.GetCountryAsync(accessToken);
 
                 // Sonucu API formatında döndür
-                return Ok(ApiResult<List<CountryResponseModel>>.Success(result, result.Count));
+                return Ok(ApiResult<List<CountryModel>>.Success(result, result.Count));
             }
             catch (Exception ex)
             {

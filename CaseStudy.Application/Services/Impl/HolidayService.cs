@@ -6,7 +6,7 @@ namespace CaseStudy.Application.Services.Impl;
 
 public class HolidayService(HttpClient httpClient) : IHolidayService
 {
-    public async Task<List<CountryResponseModel>> GetCountryAsync(string accessToken)
+    public async Task<List<CountryModel>> GetCountryAsync(string accessToken)
     {
         if (string.IsNullOrEmpty(accessToken))
         {
@@ -25,14 +25,14 @@ public class HolidayService(HttpClient httpClient) : IHolidayService
         }
 
         // Yanıtı parse et
-        var countries = await response.Content.ReadFromJsonAsync<List<Country>>();
+        var countries = await response.Content.ReadFromJsonAsync<List<CountryHoliday>>();
 
         if (countries == null || !countries.Any())
-            return new List<CountryResponseModel>();
+            return new List<CountryModel>();
 
         // Ülke kodlarını dönüştür ve döndür
         var countryCodes = countries
-            .Select(country => new CountryResponseModel
+            .Select(country => new CountryModel
             {
                 Id = Guid.NewGuid(),
                 IsoCode = country.IsoCode,
