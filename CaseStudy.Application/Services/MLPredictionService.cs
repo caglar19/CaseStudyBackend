@@ -2,6 +2,7 @@ using Microsoft.ML;
 using Microsoft.ML.Data;
 using CaseStudy.Application.Models.BayTahmin;
 using Microsoft.Extensions.Logging;
+using CaseStudy.Application.Interfaces;
 
 namespace CaseStudy.Application.Services
 {
