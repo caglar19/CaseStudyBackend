@@ -1,109 +1,286 @@
-﻿using System.Net.Http.Headers;
-using System.Net.Http.Json;
+﻿using CaseStudy.Application.Interfaces;
+using CaseStudy.Application.Models.BayTahmin;
+using System.Net.Http;
+using Microsoft.Extensions.Configuration;
+using System.Text.Json;
 
-namespace CaseStudy.Application.Services.Impl
+namespace CaseStudy.Application.Services
 {
     public class BayTahminService : IBayTahminService
     {
         private readonly HttpClient _httpClient;
-        private const string ApiKey = "0e63c874eae037a8d315c90fd79a3281";
+        private readonly string _apiKey;
+        private readonly string _baseUrl = "https://api-football-v1.p.rapidapi.com/v3";
 
-        public BayTahminService(HttpClient httpClient)
+        public BayTahminService(IConfiguration configuration, HttpClient httpClient)
         {
             _httpClient = httpClient;
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
-            _httpClient.BaseAddress = new Uri("https://v1.basketball.api-sports.io/");
+            _apiKey = configuration["FootballApi:ApiKey"];
+            _httpClient.DefaultRequestHeaders.Add("x-rapidapi-key", _apiKey);
+            _httpClient.DefaultRequestHeaders.Add("x-rapidapi-host", "api-football-v1.p.rapidapi.com");
         }
 
-        // 1. Seasons ve Countries
-        public async Task<List<dynamic>> GetSeasonsAsync()
+        public async Task<IEnumerable<LeagueModel>> GetLeaguesAsync(string country = null)
         {
-            var response = await _httpClient.GetAsync("seasons");
+            var url = $"{_baseUrl}/leagues";
+            if (!string.IsNullOrEmpty(country))
+            {
+                url += $"?country={country}";
+            }
+
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<LeagueModel>>(content);
+
+            return result.Response;
         }
 
-        public async Task<List<dynamic>> GetCountriesAsync()
+        public async Task<LeagueModel> GetLeagueByIdAsync(int id)
         {
-            var response = await _httpClient.GetAsync("countries");
+            var url = $"{_baseUrl}/leagues?id={id}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<LeagueModel>>(content);
+
+            return result.Response.FirstOrDefault();
         }
 
-        // 2. Leagues
-        public async Task<List<dynamic>> GetLeaguesAsync(int season, string country)
+        public async Task<IEnumerable<TeamModel>> GetTeamsByLeagueAsync(int leagueId)
         {
-            var response = await _httpClient.GetAsync($"leagues?season={season}&country={country}");
+            var url = $"{_baseUrl}/teams?league={leagueId}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<TeamModel>>(content);
+
+            return result.Response;
         }
 
-        // 3. Teams
-        public async Task<List<dynamic>> GetTeamsAsync(int leagueId, int season)
+        public async Task<TeamModel> GetTeamByIdAsync(int id)
         {
-            var response = await _httpClient.GetAsync($"teams?league={leagueId}&season={season}");
+            var url = $"{_baseUrl}/teams?id={id}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<TeamModel>>(content);
+
+            return result.Response.FirstOrDefault();
         }
 
-        public async Task<dynamic> GetTeamStatisticsAsync(int teamId, int leagueId, int season)
+        public async Task<IEnumerable<MatchModel>> GetMatchesByLeagueAsync(int leagueId)
         {
-            var response = await _httpClient.GetAsync($"teams/statistics?team={teamId}&league={leagueId}&season={season}");
+            var url = $"{_baseUrl}/fixtures?league={leagueId}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<dynamic>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<MatchModel>>(content);
+
+            return result.Response;
         }
 
-        // 4. Players
-        public async Task<List<dynamic>> GetPlayersAsync(int teamId, int season)
+        public async Task<IEnumerable<MatchModel>> GetUpcomingMatchesAsync(int leagueId)
         {
-            var response = await _httpClient.GetAsync($"players?team={teamId}&season={season}");
+            var url = $"{_baseUrl}/fixtures?league={leagueId}&status=NS";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<MatchModel>>(content);
+
+            return result.Response;
         }
 
-        public async Task<dynamic> GetPlayerStatisticsAsync(int playerId, int season)
+        public async Task<MatchModel> GetMatchByIdAsync(int id)
         {
-            var response = await _httpClient.GetAsync($"players/statistics?player={playerId}&season={season}");
+            var url = $"{_baseUrl}/fixtures?id={id}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<dynamic>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<MatchModel>>(content);
+
+            return result.Response.FirstOrDefault();
         }
 
-        // 5. Games
-        public async Task<List<dynamic>> GetGamesAsync(int leagueId, int season)
+        public async Task<MatchStatisticsModel> GetMatchStatisticsAsync(int matchId)
         {
-            var response = await _httpClient.GetAsync($"games?league={leagueId}&season={season}");
+            var url = $"{_baseUrl}/fixtures/statistics?fixture={matchId}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<MatchStatisticsModel>>(content);
+
+            return result.Response.FirstOrDefault();
         }
 
-        public async Task<List<dynamic>> GetHeadToHeadAsync(int team1Id, int team2Id)
+        public async Task<IEnumerable<PlayerModel>> GetPlayersByTeamAsync(int teamId)
         {
-            var response = await _httpClient.GetAsync($"games/h2h?team1={team1Id}&team2={team2Id}");
+            var url = $"{_baseUrl}/players/squads?team={teamId}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<PlayerModel>>(content);
+
+            return result.Response;
         }
 
-        // 6. Standings
-        public async Task<List<dynamic>> GetStandingsAsync(int leagueId, int season)
+        public async Task<PlayerModel> GetPlayerByIdAsync(int id)
         {
-            var response = await _httpClient.GetAsync($"standings?league={leagueId}&season={season}");
+            var url = $"{_baseUrl}/players?id={id}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<PlayerModel>>(content);
+
+            return result.Response.FirstOrDefault();
         }
 
-        // 7. Odds ve Bahis
-        public async Task<List<dynamic>> GetOddsAsync(int gameId)
+        public async Task<IEnumerable<PredictionModel>> GetPredictionsByMatchAsync(int matchId)
         {
-            var response = await _httpClient.GetAsync($"odds?game={gameId}");
+            var url = $"{_baseUrl}/predictions?fixture={matchId}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<PredictionModel>>(content);
+
+            return result.Response;
         }
 
-        public async Task<List<dynamic>> GetBetsAsync(int gameId)
+        public async Task<PredictionModel> CreatePredictionAsync(PredictionModel prediction)
         {
-            var response = await _httpClient.GetAsync($"bets?game={gameId}");
+            // Bu metod API'de yok, kendi veritabanımıza kaydetmemiz gerekiyor
+            throw new NotImplementedException();
+        }
+
+        public async Task<IEnumerable<OddsModel>> GetOddsByMatchAsync(int matchId)
+        {
+            var url = $"{_baseUrl}/odds?fixture={matchId}";
+            var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<dynamic>>();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<OddsModel>>(content);
+
+            return result.Response;
+        }
+
+        public async Task<OddsModel> UpdateOddsAsync(int matchId, OddsModel odds)
+        {
+            // Bu metod API'de yok, kendi veritabanımıza kaydetmemiz gerekiyor
+            throw new NotImplementedException();
+        }
+
+        public async Task<IEnumerable<TransferModel>> GetTransfersByPlayerAsync(int playerId)
+        {
+            var url = $"{_baseUrl}/transfers?player={playerId}";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<TransferModel>>(content);
+
+            return result.Response;
+        }
+
+        public async Task<IEnumerable<TransferModel>> GetTransfersByTeamAsync(int teamId)
+        {
+            var url = $"{_baseUrl}/transfers?team={teamId}";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<TransferModel>>(content);
+
+            return result.Response;
+        }
+
+        public async Task<IEnumerable<InjuryModel>> GetInjuriesByPlayerAsync(int playerId)
+        {
+            var url = $"{_baseUrl}/injuries?player={playerId}";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<InjuryModel>>(content);
+
+            return result.Response;
+        }
+
+        public async Task<IEnumerable<InjuryModel>> GetActiveInjuriesByTeamAsync(int teamId)
+        {
+            var url = $"{_baseUrl}/injuries?team={teamId}&status=active";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<InjuryModel>>(content);
+
+            return result.Response;
+        }
+
+        public async Task SyncLeagueDataAsync(int leagueId, int season)
+        {
+            // API'den veriyi çekip veritabanına kaydetme işlemi
+            var leagues = await GetLeaguesAsync();
+            // Veritabanına kaydetme işlemi
+        }
+
+        public async Task SyncTeamDataAsync(int leagueId)
+        {
+            // API'den veriyi çekip veritabanına kaydetme işlemi
+            var teams = await GetTeamsByLeagueAsync(leagueId);
+            // Veritabanına kaydetme işlemi
+        }
+
+        public async Task SyncFixturesAsync(int leagueId, int season)
+        {
+            // API'den veriyi çekip veritabanına kaydetme işlemi
+            var matches = await GetMatchesByLeagueAsync(leagueId);
+            // Veritabanına kaydetme işlemi
+        }
+
+        public async Task SyncLiveScoresAsync(int leagueId)
+        {
+            var url = $"{_baseUrl}/fixtures?league={leagueId}&live=all";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<ApiResponse<MatchModel>>(content);
+
+            // Canlı skorları veritabanına kaydetme işlemi
+        }
+
+        public async Task UpdateMatchStatisticsAsync(int matchId)
+        {
+            var statistics = await GetMatchStatisticsAsync(matchId);
+            // Veritabanına kaydetme işlemi
+        }
+
+        public async Task UpdateTeamStatisticsAsync(int teamId, int leagueId, int season)
+        {
+            var url = $"{_baseUrl}/teams/statistics?team={teamId}&league={leagueId}&season={season}";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            // Takım istatistiklerini veritabanına kaydetme işlemi
+        }
+
+        private class ApiResponse<T>
+        {
+            public List<T> Response { get; set; }
         }
     }
 }

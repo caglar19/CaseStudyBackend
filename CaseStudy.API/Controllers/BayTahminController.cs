@@ -1,184 +1,128 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using CaseStudy.Application.Interfaces;
+using CaseStudy.Application.Models.BayTahmin;
 using Microsoft.AspNetCore.Mvc;
-using CaseStudy.Application.Services;
-using Microsoft.Extensions.Logging;
 
 namespace CaseStudy.API.Controllers
 {
-    [Route("core/api/[controller]/[action]")]
     [ApiController]
-    [AllowAnonymous]
+    [Route("api/[controller]")]
     public class BayTahminController : ControllerBase
     {
         private readonly IBayTahminService _bayTahminService;
-        private readonly ILogger<BayTahminController> _logger;
 
-        public BayTahminController(
-            IBayTahminService bayTahminService,
-            ILogger<BayTahminController> logger)
+        public BayTahminController(IBayTahminService bayTahminService)
         {
             _bayTahminService = bayTahminService;
-            _logger = logger;
         }
 
-        // 1. Sezonları Getir
-        [HttpGet]
-        public async Task<IActionResult> GetSeasons()
+        [HttpGet("leagues")]
+        public async Task<ActionResult<IEnumerable<LeagueModel>>> GetLeagues(string country = null)
         {
-            try
-            {
-                var seasons = await _bayTahminService.GetSeasonsAsync();
-                return Ok(seasons);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Sezonları çekerken bir hata oluştu.");
-                return StatusCode(500, "Sezon verileri alınamadı.");
-            }
+            var leagues = await _bayTahminService.GetLeaguesAsync(country);
+            return Ok(leagues);
         }
 
-        // 2. Ülkeleri Getir
-        [HttpGet]
-        public async Task<IActionResult> GetCountries()
+        [HttpGet("leagues/{id}")]
+        public async Task<ActionResult<LeagueModel>> GetLeague(int id)
         {
-            try
-            {
-                var countries = await _bayTahminService.GetCountriesAsync();
-                return Ok(countries);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ülkeleri çekerken bir hata oluştu.");
-                return StatusCode(500, "Ülke verileri alınamadı.");
-            }
+            var league = await _bayTahminService.GetLeagueByIdAsync(id);
+            if (league == null)
+                return NotFound();
+            return Ok(league);
         }
 
-        // 3. Ligleri Getir
-        [HttpGet("{season}/{country}")]
-        public async Task<IActionResult> GetLeagues(int season, string country)
+        [HttpGet("teams/league/{leagueId}")]
+        public async Task<ActionResult<IEnumerable<TeamModel>>> GetTeamsByLeague(int leagueId)
         {
-            try
-            {
-                var leagues = await _bayTahminService.GetLeaguesAsync(season, country);
-                return Ok(leagues);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ligleri çekerken bir hata oluştu.");
-                return StatusCode(500, "Lig verileri alınamadı.");
-            }
+            var teams = await _bayTahminService.GetTeamsByLeagueAsync(leagueId);
+            return Ok(teams);
         }
 
-        // 4. Takımları Getir
-        [HttpGet("{leagueId}/{season}")]
-        public async Task<IActionResult> GetTeams(int leagueId, int season)
+        [HttpGet("matches/league/{leagueId}")]
+        public async Task<ActionResult<IEnumerable<MatchModel>>> GetMatchesByLeague(int leagueId)
         {
-            try
-            {
-                var teams = await _bayTahminService.GetTeamsAsync(leagueId, season);
-                return Ok(teams);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Takımları çekerken bir hata oluştu.");
-                return StatusCode(500, "Takım verileri alınamadı.");
-            }
+            var matches = await _bayTahminService.GetMatchesByLeagueAsync(leagueId);
+            return Ok(matches);
         }
 
-        // 5. Takım İstatistiklerini Getir
-        [HttpGet("{teamId}/{leagueId}/{season}")]
-        public async Task<IActionResult> GetTeamStatistics(int teamId, int leagueId, int season)
+        [HttpGet("matches/upcoming/{leagueId}")]
+        public async Task<ActionResult<IEnumerable<MatchModel>>> GetUpcomingMatches(int leagueId)
         {
-            try
-            {
-                var stats = await _bayTahminService.GetTeamStatisticsAsync(teamId, leagueId, season);
-                return Ok(stats);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Takım istatistiklerini çekerken bir hata oluştu.");
-                return StatusCode(500, "Takım istatistik verileri alınamadı.");
-            }
+            var matches = await _bayTahminService.GetUpcomingMatchesAsync(leagueId);
+            return Ok(matches);
         }
 
-        // 6. Maçları Getir
-        [HttpGet("{leagueId}/{season}")]
-        public async Task<IActionResult> GetGames(int leagueId, int season)
+        [HttpGet("matches/{id}/statistics")]
+        public async Task<ActionResult<MatchStatisticsModel>> GetMatchStatistics(int id)
         {
-            try
-            {
-                var games = await _bayTahminService.GetGamesAsync(leagueId, season);
-                return Ok(games);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Maçları çekerken bir hata oluştu.");
-                return StatusCode(500, "Maç verileri alınamadı.");
-            }
+            var statistics = await _bayTahminService.GetMatchStatisticsAsync(id);
+            if (statistics == null)
+                return NotFound();
+            return Ok(statistics);
         }
 
-        // 7. H2H (Head to Head) Bilgileri Getir
-        [HttpGet("{team1Id}/{team2Id}")]
-        public async Task<IActionResult> GetHeadToHead(int team1Id, int team2Id)
+        [HttpGet("matches/{id}/odds")]
+        public async Task<ActionResult<IEnumerable<OddsModel>>> GetMatchOdds(int id)
         {
-            try
-            {
-                var h2h = await _bayTahminService.GetHeadToHeadAsync(team1Id, team2Id);
-                return Ok(h2h);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "H2H bilgilerini çekerken bir hata oluştu.");
-                return StatusCode(500, "H2H verileri alınamadı.");
-            }
+            var odds = await _bayTahminService.GetOddsByMatchAsync(id);
+            return Ok(odds);
         }
 
-        // 8. Lig Sıralamalarını Getir
-        [HttpGet("{leagueId}/{season}")]
-        public async Task<IActionResult> GetStandings(int leagueId, int season)
+        [HttpGet("players/team/{teamId}")]
+        public async Task<ActionResult<IEnumerable<PlayerModel>>> GetPlayersByTeam(int teamId)
         {
-            try
-            {
-                var standings = await _bayTahminService.GetStandingsAsync(leagueId, season);
-                return Ok(standings);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Lig sıralamalarını çekerken bir hata oluştu.");
-                return StatusCode(500, "Sıralama verileri alınamadı.");
-            }
+            var players = await _bayTahminService.GetPlayersByTeamAsync(teamId);
+            return Ok(players);
         }
 
-        // 9. Bahis Oranlarını Getir
-        [HttpGet("{gameId}")]
-        public async Task<IActionResult> GetOdds(int gameId)
+        [HttpGet("predictions/match/{matchId}")]
+        public async Task<ActionResult<IEnumerable<PredictionModel>>> GetMatchPredictions(int matchId)
         {
-            try
-            {
-                var odds = await _bayTahminService.GetOddsAsync(gameId);
-                return Ok(odds);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Bahis oranlarını çekerken bir hata oluştu.");
-                return StatusCode(500, "Bahis oranı verileri alınamadı.");
-            }
+            var predictions = await _bayTahminService.GetPredictionsByMatchAsync(matchId);
+            return Ok(predictions);
         }
 
-        // 10. Bahisleri Getir
-        [HttpGet("{gameId}")]
-        public async Task<IActionResult> GetBets(int gameId)
+        [HttpPost("predictions")]
+        public async Task<ActionResult<PredictionModel>> CreatePrediction(PredictionModel prediction)
         {
-            try
-            {
-                var bets = await _bayTahminService.GetBetsAsync(gameId);
-                return Ok(bets);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Bahis bilgilerini çekerken bir hata oluştu.");
-                return StatusCode(500, "Bahis verileri alınamadı.");
-            }
+            var createdPrediction = await _bayTahminService.CreatePredictionAsync(prediction);
+            return CreatedAtAction(nameof(GetMatchPredictions), new { matchId = prediction.MatchId }, createdPrediction);
+        }
+
+        [HttpGet("transfers/player/{playerId}")]
+        public async Task<ActionResult<IEnumerable<TransferModel>>> GetPlayerTransfers(int playerId)
+        {
+            var transfers = await _bayTahminService.GetTransfersByPlayerAsync(playerId);
+            return Ok(transfers);
+        }
+
+        [HttpGet("injuries/team/{teamId}")]
+        public async Task<ActionResult<IEnumerable<InjuryModel>>> GetTeamInjuries(int teamId)
+        {
+            var injuries = await _bayTahminService.GetActiveInjuriesByTeamAsync(teamId);
+            return Ok(injuries);
+        }
+
+        // Sync endpoints for admin use
+        [HttpPost("sync/league/{leagueId}/{season}")]
+        public async Task<IActionResult> SyncLeagueData(int leagueId, int season)
+        {
+            await _bayTahminService.SyncLeagueDataAsync(leagueId, season);
+            return Ok();
+        }
+
+        [HttpPost("sync/fixtures/{leagueId}/{season}")]
+        public async Task<IActionResult> SyncFixtures(int leagueId, int season)
+        {
+            await _bayTahminService.SyncFixturesAsync(leagueId, season);
+            return Ok();
+        }
+
+        [HttpPost("sync/live-scores/{leagueId}")]
+        public async Task<IActionResult> SyncLiveScores(int leagueId)
+        {
+            await _bayTahminService.SyncLiveScoresAsync(leagueId);
+            return Ok();
         }
     }
 }

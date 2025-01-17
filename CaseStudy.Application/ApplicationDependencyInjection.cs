@@ -4,10 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using CaseStudy.Application.Common.Email;
 using CaseStudy.Application.MappingProfiles;
-using CaseStudy.Application.Services;
 using CaseStudy.Application.Services.Impl;
 using CaseStudy.Shared.Services;
 using CaseStudy.Shared.Services.Impl;
+using CaseStudy.Application.Interfaces;
 
 namespace CaseStudy.Application;
 

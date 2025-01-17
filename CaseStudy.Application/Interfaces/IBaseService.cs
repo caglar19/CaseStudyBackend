@@ -1,6 +1,6 @@
 ﻿using CaseStudy.Application.Models;
 
-namespace CaseStudy.Application.Services;
+namespace CaseStudy.Application.Interfaces;
 
 public interface IBaseService<in TCreateModel, TCreateResponseModel, TReadResponseModel, in TUpdateModel,
     TUpdateResponseModel>

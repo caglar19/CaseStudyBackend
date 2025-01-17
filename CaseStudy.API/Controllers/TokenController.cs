@@ -1,5 +1,5 @@
-﻿using CaseStudy.Application.Models.Holiday;
-using CaseStudy.Application.Services;
+﻿using CaseStudy.Application.Interfaces;
+using CaseStudy.Application.Models.Holiday;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CaseStudy.API.Controllers

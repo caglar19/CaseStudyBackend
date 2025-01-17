@@ -1,6 +1,6 @@
 ﻿using CaseStudy.Application.Models.Holiday;
 
-namespace CaseStudy.Application.Services;
+namespace CaseStudy.Application.Interfaces;
 
 public interface ITokenService
 {

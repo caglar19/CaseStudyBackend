@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Mvc;
 using CaseStudy.Application.Models;
 using CaseStudy.Application.Models.Holiday;
-using CaseStudy.Application.Services;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -12,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Security.Cryptography;
 using Newtonsoft.Json;
+using CaseStudy.Application.Interfaces;
 
 namespace CaseStudy.API.Controllers
 {
