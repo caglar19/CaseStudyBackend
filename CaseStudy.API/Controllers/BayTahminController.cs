@@ -74,7 +74,7 @@ namespace CaseStudy.API.Controllers
         public async Task<ActionResult<IEnumerable<TeamModel>>> GetTeam(int id)
         {
             var team = await _bayTahminService.GetTeamByIdAsync(id);
-            if (team == null || !team.Any())
+            if (team == null)
                 return NotFound();
             return Ok(team);
         }

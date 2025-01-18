@@ -76,18 +76,18 @@ namespace CaseStudy.Application.Services
                 // Tahmin için veriyi hazırla
                 var predictionData = new MatchPredictionData
                 {
-                    HomeTeamRank = await GetTeamRank(homeTeam.Id),
-                    AwayTeamRank = await GetTeamRank(awayTeam.Id),
-                    HomeTeamForm = await CalculateTeamForm(homeTeam.Id),
-                    AwayTeamForm = await CalculateTeamForm(awayTeam.Id),
-                    HomeTeamGoalsScored = await GetTeamGoalsScored(homeTeam.Id),
-                    AwayTeamGoalsScored = await GetTeamGoalsScored(awayTeam.Id),
-                    HomeTeamGoalsConceded = await GetTeamGoalsConceded(homeTeam.Id),
-                    AwayTeamGoalsConceded = await GetTeamGoalsConceded(awayTeam.Id),
-                    H2HHomeWins = await GetH2HWins(homeTeam.Id, awayTeam.Id),
-                    H2HAwayWins = await GetH2HWins(awayTeam.Id, homeTeam.Id),
-                    HomeTeamInjuredPlayers = await GetInjuredPlayersCount(homeTeam.Id),
-                    AwayTeamInjuredPlayers = await GetInjuredPlayersCount(awayTeam.Id)
+                    HomeTeamRank = await GetTeamRank(homeTeam.Team.Id),
+                    AwayTeamRank = await GetTeamRank(awayTeam.Team.Id),
+                    HomeTeamForm = await CalculateTeamForm(homeTeam.Team.Id),
+                    AwayTeamForm = await CalculateTeamForm(awayTeam.Team.Id),
+                    HomeTeamGoalsScored = await GetTeamGoalsScored(homeTeam.Team.Id),
+                    AwayTeamGoalsScored = await GetTeamGoalsScored(awayTeam.Team.Id),
+                    HomeTeamGoalsConceded = await GetTeamGoalsConceded(homeTeam.Team.Id),
+                    AwayTeamGoalsConceded = await GetTeamGoalsConceded(awayTeam.Team.Id),
+                    H2HHomeWins = await GetH2HWins(homeTeam.Team.Id, awayTeam.Team.Id),
+                    H2HAwayWins = await GetH2HWins(awayTeam.Team.Id, homeTeam.Team.Id),
+                    HomeTeamInjuredPlayers = await GetInjuredPlayersCount(homeTeam.Team.Id),
+                    AwayTeamInjuredPlayers = await GetInjuredPlayersCount(awayTeam.Team.Id)
                 };
 
                 // Tahmin yap
@@ -98,8 +98,8 @@ namespace CaseStudy.Application.Services
                 return new PredictionAnalysis
                 {
                     MatchId = matchId,
-                    HomeTeam = homeTeam.Name,
-                    AwayTeam = awayTeam.Name,
+                    HomeTeam = homeTeam.Team.Name, // Fix: Accessing the Name property of the Team object
+                    AwayTeam = awayTeam.Team.Name, // Fix: Accessing the Name property of the Team object
                     PredictedResult = prediction.PredictedResult,
                     HomeWinProbability = prediction.Score[0],
                     DrawProbability = prediction.Score[1],
