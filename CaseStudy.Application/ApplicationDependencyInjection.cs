@@ -26,6 +26,7 @@ public static class ApplicationDependencyInjection
     {
         services.AddScoped<IHolidayService, HolidayService>();
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IBayTahminService, BayTahminService>();
     }
     private static void RegisterAutoMapper(this IServiceCollection services)
     {
