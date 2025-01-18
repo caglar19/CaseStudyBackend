@@ -12,10 +12,10 @@ namespace CaseStudy.Application.Models.BayTahmin
         public DateTime Update { get; set; }
 
         [JsonPropertyName("transfers")]
-        public Transfer[] Transfers { get; set; }
+        public TransferInfo[] Transfers { get; set; }
     }
 
-    public class Transfer
+    public class TransferInfo
     {
         [JsonPropertyName("date")]
         public DateTime Date { get; set; }

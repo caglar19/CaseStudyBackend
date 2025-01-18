@@ -12,7 +12,6 @@ namespace CaseStudy.Application.Models.BayTahmin
         public int YellowCards { get; set; }
         public int RedCards { get; set; }
 
-        public virtual MatchModel Match { get; set; }
         public virtual TeamModel Team { get; set; }
     }
 }
