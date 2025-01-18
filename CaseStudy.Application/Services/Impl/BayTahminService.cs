@@ -26,15 +26,14 @@ namespace CaseStudy.Application.Services.Impl
             _httpClient.DefaultRequestHeaders.Add("x-rapidapi-host", "v3.football.api-sports.io");
         }
 
-        private async Task<T> GetApiResponseAsync<T>(string endpoint, Dictionary<string, string> queryParams = null)
+        private async Task<ApiResponse<T>> GetApiResponseAsync<T>(string endpoint, Dictionary<string, string> queryParams = null)
         {
             try
             {
                 var url = $"{_baseUrl}/{endpoint.TrimStart('/')}";
                 if (queryParams?.Any() == true)
                 {
-                    var queryString = string.Join("&", queryParams.Select(p => 
-                        $"{p.Key}={HttpUtility.UrlEncode(p.Value)}"));
+                    var queryString = string.Join("&", queryParams.Select(p => $"{p.Key}={HttpUtility.UrlEncode(p.Value)}"));
                     url += $"?{queryString}";
                 }
 
@@ -44,15 +43,25 @@ namespace CaseStudy.Application.Services.Impl
                 response.EnsureSuccessStatusCode();
 
                 var content = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<ApiResponse<T>>(content);
+                _logger.LogInformation("API Response Content: {Content}", content);
 
-                if (result?.Response == null)
+                var result = JsonSerializer.Deserialize<ApiResponse<T>>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (result == null)
                 {
                     _logger.LogWarning("API response was null for endpoint: {Endpoint}", endpoint);
                     throw new InvalidOperationException($"API response was null for endpoint: {endpoint}");
                 }
 
-                return result.Response.FirstOrDefault();
+                return result;
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "JSON deserialization failed for endpoint {Endpoint}: {Message}", endpoint, ex.Message);
+                throw;
             }
             catch (HttpRequestException ex)
             {
@@ -66,17 +75,24 @@ namespace CaseStudy.Application.Services.Impl
             }
         }
 
-        private Task<List<T>> GetApiListResponseAsync<T>(string endpoint, Dictionary<string, string> queryParams = null)
+        private async Task<List<T>> GetApiListResponseAsync<T>(string endpoint, Dictionary<string, string> queryParams = null)
         {
-            return GetApiResponseAsync<List<T>>(endpoint, queryParams);
+            var result = await GetApiResponseAsync<T>(endpoint, queryParams);
+            return result.Response ?? new List<T>();
         }
 
         #region Countries
-        public Task<List<CountryModel>> GetCountriesAsync()
-            => GetApiListResponseAsync<CountryModel>("countries");
+        public async Task<List<CountryModel>> GetCountriesAsync()
+        {
+            var result = await GetApiResponseAsync<CountryModel>("countries");
+            return result.Response ?? new List<CountryModel>();
+        }
 
         public async Task<CountryModel> GetCountryByCodeAsync(string code)
-            => await GetApiResponseAsync<CountryModel>("countries", new Dictionary<string, string> { { "code", code } });
+        {
+            var result = await GetApiResponseAsync<CountryModel>("countries", new Dictionary<string, string> { { "code", code } });
+            return result.Response?.FirstOrDefault();
+        }
         #endregion
 
         #region Leagues
@@ -91,28 +107,28 @@ namespace CaseStudy.Application.Services.Impl
         }
 
         public async Task<LeagueModel> GetLeagueByIdAsync(int id)
-            => await GetApiResponseAsync<LeagueModel>("leagues", new Dictionary<string, string> { { "id", id.ToString() } });
+            => (await GetApiResponseAsync<LeagueModel>("leagues", new Dictionary<string, string> { { "id", id.ToString() } })).Response?.FirstOrDefault();
 
         public async Task<List<int>> GetLeagueSeasonsAsync()
         {
-            var response = await GetApiResponseAsync<SeasonResponse>("leagues/seasons");
-            return response.Response;
+            var response = await GetApiResponseAsync<int>("leagues/seasons");
+            return response.Response ?? new List<int>();
         }
 
-        #endregion
-
-        #region Teams
         public async Task<TeamModel> GetTeamByIdAsync(int teamId)
-            => (await GetApiResponseAsync<List<TeamModel>>("teams", new Dictionary<string, string> { { "id", teamId.ToString() } })).FirstOrDefault();
+        {
+            var response = await GetApiResponseAsync<TeamModel>("teams", new Dictionary<string, string> { { "id", teamId.ToString() } });
+            return response.Response?.FirstOrDefault() ?? throw new InvalidOperationException("Team not found");
+        }
 
         public async Task<TeamStatistics> GetTeamStatisticsAsync(int teamId, int leagueId, int season)
-            => await GetApiResponseAsync<TeamStatistics>("teams/statistics", 
+            => (await GetApiResponseAsync<TeamStatistics>("teams/statistics", 
                 new Dictionary<string, string>
                 {
                     { "team", teamId.ToString() },
                     { "league", leagueId.ToString() },
                     { "season", season.ToString() }
-                });
+                })).Response?.FirstOrDefault();
 
         public Task<List<int>> GetTeamSeasonsAsync(int teamId)
             => GetApiListResponseAsync<int>("teams/seasons", new Dictionary<string, string> { { "team", teamId.ToString() } });
@@ -123,7 +139,7 @@ namespace CaseStudy.Application.Services.Impl
 
         #region Venues
         public async Task<VenueModel> GetVenueByIdAsync(int venueId)
-            => await GetApiResponseAsync<VenueModel>("venues", new Dictionary<string, string> { { "id", venueId.ToString() } });
+            => (await GetApiResponseAsync<VenueModel>("venues", new Dictionary<string, string> { { "id", venueId.ToString() } })).Response?.FirstOrDefault();
 
         public Task<List<VenueModel>> GetVenuesBySearchAsync(string name = null, string city = null, string country = null)
         {
@@ -138,12 +154,12 @@ namespace CaseStudy.Application.Services.Impl
 
         #region Standings
         public async Task<StandingsResponse> GetLeagueStandingsAsync(int leagueId, int season)
-            => await GetApiResponseAsync<StandingsResponse>("standings", 
+            => (await GetApiResponseAsync<StandingsResponse>("standings", 
                 new Dictionary<string, string>
                 {
                     { "league", leagueId.ToString() },
                     { "season", season.ToString() }
-                });
+                })).Response?.FirstOrDefault();
         #endregion
 
         #region Fixtures
@@ -162,7 +178,10 @@ namespace CaseStudy.Application.Services.Impl
             => GetApiListResponseAsync<Fixture>("fixtures/headtohead", new Dictionary<string, string> { { "h2h", h2h } });
 
         public async Task<Fixture> GetMatchByIdAsync(int matchId)
-            => (await GetApiResponseAsync<List<Fixture>>("fixtures", new Dictionary<string, string> { { "id", matchId.ToString() } })).FirstOrDefault();
+        {
+            var response = await GetApiResponseAsync<Fixture>("fixtures", new Dictionary<string, string> { { "id", matchId.ToString() } });
+            return response.Response?.FirstOrDefault() ?? throw new InvalidOperationException("Match not found");
+        }
 
         public Task<List<FixtureStatistics>> GetFixtureStatisticsAsync(int fixtureId, int? teamId = null)
         {
@@ -204,7 +223,7 @@ namespace CaseStudy.Application.Services.Impl
             => GetApiListResponseAsync<int>("players/seasons");
 
         public async Task<PlayerDetailedInfo> GetPlayerProfileAsync(int playerId)
-            => await GetApiResponseAsync<PlayerDetailedInfo>("players", new Dictionary<string, string> { { "id", playerId.ToString() } });
+            => (await GetApiResponseAsync<PlayerDetailedInfo>("players", new Dictionary<string, string> { { "id", playerId.ToString() } })).Response?.FirstOrDefault();
 
         public Task<List<PlayerProfile>> GetPlayerStatisticsAsync(int playerId, int season)
             => GetApiListResponseAsync<PlayerProfile>("players", 
@@ -273,7 +292,10 @@ namespace CaseStudy.Application.Services.Impl
             => GetApiListResponseAsync<BookmakerInfo>("odds/bookmakers");
 
         public async Task<List<BetInfo>> GetBetsAsync()
-            => await GetApiResponseAsync<List<BetInfo>>("odds/bets");
+        {
+            var response = await GetApiResponseAsync<BetInfo>("odds/bets");
+            return response.Response ?? new List<BetInfo>();
+        }
         #endregion
 
         private class ApiResponse<T>
@@ -282,7 +304,7 @@ namespace CaseStudy.Application.Services.Impl
             public List<T> Response { get; set; }
 
             [JsonPropertyName("errors")]
-            public Dictionary<string, string[]> Errors { get; set; }
+            public object Errors { get; set; }
         }
 
         private class SeasonResponse
@@ -291,7 +313,7 @@ namespace CaseStudy.Application.Services.Impl
             public List<int> Response { get; set; }
 
             [JsonPropertyName("errors")]
-            public Dictionary<string, string[]> Errors { get; set; }
+            public object Errors { get; set; }
         }
     }
 }
