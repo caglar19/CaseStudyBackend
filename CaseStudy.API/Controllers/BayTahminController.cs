@@ -69,9 +69,9 @@ namespace CaseStudy.API.Controllers
 
         #region Teams
         [HttpGet("teams/{id}")]
-        [ProducesResponseType(typeof(IEnumerable<TeamModel>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(TeamModel), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<IEnumerable<TeamModel>>> GetTeam(int id)
+        public async Task<ActionResult<TeamModel>> GetTeam(int id)
         {
             var team = await _bayTahminService.GetTeamByIdAsync(id);
             if (team == null)
@@ -141,6 +141,93 @@ namespace CaseStudy.API.Controllers
             if (standings == null)
                 return NotFound();
             return Ok(standings);
+        }
+        #endregion
+
+        #region Fixtures
+        [HttpGet("fixtures/day")]
+        [ProducesResponseType(typeof(IEnumerable<Fixture>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<Fixture>>> GetLiveFixtures()
+        {
+            var fixtures = await _bayTahminService.GetLiveFixturesAsync();
+            return Ok(fixtures);
+        }
+
+        [HttpGet("fixtures/headtohead")]
+        [ProducesResponseType(typeof(IEnumerable<Fixture>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<Fixture>>> GetHeadToHeadFixtures([FromQuery] string h2h)
+        {
+            var fixtures = await _bayTahminService.GetHeadToHeadFixturesAsync(h2h);
+            return Ok(fixtures);
+        }
+
+        [HttpGet("fixtures/{id}")]
+        [ProducesResponseType(typeof(Fixture), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<Fixture>> GetMatchById(int id)
+        {
+            var fixture = await _bayTahminService.GetMatchByIdAsync(id);
+            if (fixture == null)
+                return NotFound();
+            return Ok(fixture);
+        }
+
+        [HttpGet("fixtures/{id}/statistics")]
+        [ProducesResponseType(typeof(IEnumerable<FixtureStatistics>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<FixtureStatistics>>> GetFixtureStatistics(int id, [FromQuery] int? teamId = null)
+        {
+            var stats = await _bayTahminService.GetFixtureStatisticsAsync(id, teamId);
+            return Ok(stats);
+        }
+
+        [HttpGet("fixtures/{id}/events")]
+        [ProducesResponseType(typeof(IEnumerable<FixtureEvent>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<FixtureEvent>>> GetFixtureEvents(int id)
+        {
+            var events = await _bayTahminService.GetFixtureEventsAsync(id);
+            return Ok(events);
+        }
+
+        [HttpGet("fixtures/{id}/lineups")]
+        [ProducesResponseType(typeof(IEnumerable<FixtureLineup>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<FixtureLineup>>> GetFixtureLineups(int id)
+        {
+            var lineups = await _bayTahminService.GetFixtureLineupsAsync(id);
+            return Ok(lineups);
+        }
+
+        [HttpGet("fixtures/{id}/players")]
+        [ProducesResponseType(typeof(IEnumerable<FixturePlayer>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<FixturePlayer>>> GetFixturePlayers(int id)
+        {
+            var players = await _bayTahminService.GetFixturePlayersAsync(id);
+            return Ok(players);
+        }
+        #endregion
+
+        #region Injuries
+        [HttpGet("injuries/fixture/{id}")]
+        [ProducesResponseType(typeof(IEnumerable<InjuryModel>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<InjuryModel>>> GetFixtureInjuries(int id)
+        {
+            var injuries = await _bayTahminService.GetFixtureInjuriesAsync(id);
+            return Ok(injuries);
+        }
+
+        [HttpGet("injuries/team/{id}")]
+        [ProducesResponseType(typeof(IEnumerable<InjuryModel>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<InjuryModel>>> GetTeamInjuries(int id, [FromQuery] int? leagueId = null, [FromQuery] int? season = null)
+        {
+            var injuries = await _bayTahminService.GetTeamInjuriesAsync(id, leagueId, season);
+            return Ok(injuries);
+        }
+
+        [HttpGet("injuries/player/{id}")]
+        [ProducesResponseType(typeof(IEnumerable<InjuryModel>), StatusCodes.Status200OK)]
+        public async Task<ActionResult<IEnumerable<InjuryModel>>> GetPlayerInjuries(int id)
+        {
+            var injuries = await _bayTahminService.GetPlayerInjuriesAsync(id);
+            return Ok(injuries);
         }
         #endregion
 

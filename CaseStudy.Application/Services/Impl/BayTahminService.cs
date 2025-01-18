@@ -171,8 +171,18 @@ namespace CaseStudy.Application.Services.Impl
                     { "season", season.ToString() }
                 });
 
-        public Task<List<Fixture>> GetLiveFixturesAsync()
-            => GetApiListResponseAsync<Fixture>("fixtures", new Dictionary<string, string> { { "live", "all" } });
+        public async Task<List<Fixture>> GetLiveFixturesAsync()
+        {
+            var today = DateTime.Now.ToString("yyyy-MM-dd");
+            var currentTime = DateTime.Now.ToString("HH:mm:ss");
+
+            var queryParams = new Dictionary<string, string>
+            {
+                { "date", today }
+            };
+
+            return await GetApiListResponseAsync<Fixture>("fixtures", queryParams);
+        }
 
         public Task<List<Fixture>> GetHeadToHeadFixturesAsync(string h2h)
             => GetApiListResponseAsync<Fixture>("fixtures/headtohead", new Dictionary<string, string> { { "h2h", h2h } });
