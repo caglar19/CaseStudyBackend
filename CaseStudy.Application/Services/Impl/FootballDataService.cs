@@ -43,16 +43,16 @@ namespace CaseStudy.Application.Services.Impl
             }
         }
 
-        public async Task<List<Fixture>> GetFixturesByLeagueAndSeasonAsync(int leagueId, int season, string date)
+        public async Task<List<Fixture>> GetFixturesByLeagueAndSeasonAsync(string date)
         {
             try
             {
-                _logger.LogInformation("Lig {LeagueId}, sezon {Season}, tarih {Date} için maçlar getiriliyor", leagueId, season, date);
-                return await _bayTahminService.GetFixturesAsync(leagueId, season, date);
+                _logger.LogInformation("Lig {LeagueId}, sezon {Season}, tarih {Date} için maçlar getiriliyor",  date);
+                return await _bayTahminService.GetFixturesAsync(date);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Maçlar getirilirken hata oluştu. Lig: {LeagueId}, Sezon: {Season}, Tarih: {Date}", leagueId, season, date);
+                _logger.LogError(ex, "Maçlar getirilirken hata oluştu. Lig: {LeagueId}, Sezon: {Season}, Tarih: {Date}",  date);
                 throw;
             }
         }

@@ -16,10 +16,16 @@ namespace CaseStudy.Application.Models.BayTahmin
         public FixtureInfo Info { get; set; }
 
         [JsonPropertyName("league")]
-        public LeagueInfo League { get; set; }
+        public FixtureLeagueInfo League { get; set; }
 
-        //public int HomeTeamId => Teams?.Home?.Id ?? 0;
-        //public int AwayTeamId => Teams?.Away?.Id ?? 0;
+        [JsonPropertyName("teams")]
+        public TeamsInfo Teams { get; set; }
+
+        [JsonPropertyName("goals")]
+        public GoalsInfo Goals { get; set; }
+
+        [JsonPropertyName("score")]
+        public ScoreInfo Score { get; set; }
     }
 
     public class FixtureInfo
@@ -39,8 +45,14 @@ namespace CaseStudy.Application.Models.BayTahmin
         [JsonPropertyName("timestamp")]
         public long Timestamp { get; set; }
 
+        [JsonPropertyName("venue")]
+        public VenueInfo Venue { get; set; }
+
         [JsonPropertyName("status")]
         public FixtureStatus Status { get; set; }
+
+        [JsonPropertyName("league")]
+        public FixtureLeagueStandingInfo LeagueStanding { get; set; }
     }
 
     public class FixtureStatus
@@ -55,13 +67,79 @@ namespace CaseStudy.Application.Models.BayTahmin
         public int? Elapsed { get; set; }
     }
 
-    public class TeamsInfo
+    public class GoalsInfo
     {
         [JsonPropertyName("home")]
-        public TeamMatchInfo Home { get; set; }
+        public int? Home { get; set; }
 
         [JsonPropertyName("away")]
-        public TeamMatchInfo Away { get; set; }
+        public int? Away { get; set; }
+    }
+
+    public class ScoreInfo
+    {
+        [JsonPropertyName("halftime")]
+        public GoalsInfo Halftime { get; set; }
+
+        [JsonPropertyName("fulltime")]
+        public GoalsInfo Fulltime { get; set; }
+
+        [JsonPropertyName("extratime")]
+        public GoalsInfo Extratime { get; set; }
+
+        [JsonPropertyName("penalty")]
+        public GoalsInfo Penalty { get; set; }
+    }
+
+    public class FixtureLeagueStandingInfo
+    {
+        [JsonPropertyName("home_position")]
+        public int? HomePosition { get; set; }
+
+        [JsonPropertyName("away_position")]
+        public int? AwayPosition { get; set; }
+
+        [JsonPropertyName("home_points")]
+        public int? HomePoints { get; set; }
+
+        [JsonPropertyName("away_points")]
+        public int? AwayPoints { get; set; }
+
+        [JsonPropertyName("home_goals_for")]
+        public int? HomeGoalsFor { get; set; }
+
+        [JsonPropertyName("away_goals_for")]
+        public int? AwayGoalsFor { get; set; }
+
+        [JsonPropertyName("home_goals_against")]
+        public int? HomeGoalsAgainst { get; set; }
+
+        [JsonPropertyName("away_goals_against")]
+        public int? AwayGoalsAgainst { get; set; }
+    }
+
+    public class FixtureLeagueInfo
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+
+        [JsonPropertyName("country")]
+        public string Country { get; set; }
+
+        [JsonPropertyName("logo")]
+        public string Logo { get; set; }
+
+        [JsonPropertyName("flag")]
+        public string Flag { get; set; }
+
+        [JsonPropertyName("season")]
+        public int Season { get; set; }
+
+        [JsonPropertyName("round")]
+        public string Round { get; set; }
     }
 
     public class TeamMatchInfo
@@ -79,10 +157,19 @@ namespace CaseStudy.Application.Models.BayTahmin
         public bool? Winner { get; set; }
     }
 
+    public class TeamsInfo
+    {
+        [JsonPropertyName("home")]
+        public TeamMatchInfo Home { get; set; }
+
+        [JsonPropertyName("away")]
+        public TeamMatchInfo Away { get; set; }
+    }
+
     public class FixtureStatistics
     {
         [JsonPropertyName("team")]
-        public TeamInfo Team { get; set; }
+        public TeamMatchInfo Team { get; set; }
 
         [JsonPropertyName("statistics")]
         public List<StatisticItem> Statistics { get; set; }
@@ -103,7 +190,7 @@ namespace CaseStudy.Application.Models.BayTahmin
         public EventTime Time { get; set; }
 
         [JsonPropertyName("team")]
-        public TeamInfo Team { get; set; }
+        public TeamMatchInfo Team { get; set; }
 
         [JsonPropertyName("player")]
         public PlayerInfo Player { get; set; }
@@ -142,7 +229,7 @@ namespace CaseStudy.Application.Models.BayTahmin
     public class FixtureLineup
     {
         [JsonPropertyName("team")]
-        public TeamInfo Team { get; set; }
+        public TeamMatchInfo Team { get; set; }
 
         [JsonPropertyName("formation")]
         public string Formation { get; set; }
@@ -196,7 +283,7 @@ namespace CaseStudy.Application.Models.BayTahmin
     public class FixturePlayer
     {
         [JsonPropertyName("team")]
-        public TeamInfo Team { get; set; }
+        public TeamMatchInfo Team { get; set; }
 
         [JsonPropertyName("players")]
         public List<PlayerStatistics> Players { get; set; }
@@ -371,5 +458,17 @@ namespace CaseStudy.Application.Models.BayTahmin
 
         [JsonPropertyName("saved")]
         public int? Saved { get; set; }
+    }
+
+    public class VenueInfo
+    {
+        [JsonPropertyName("id")]
+        public int? Id { get; set; }
+
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+
+        [JsonPropertyName("city")]
+        public string City { get; set; }
     }
 }

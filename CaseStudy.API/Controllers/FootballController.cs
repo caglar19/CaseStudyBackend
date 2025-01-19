@@ -55,7 +55,7 @@ namespace CaseStudy.API.Controllers
         {
             try
             {
-                var fixtures = await _footballService.GetFixturesByLeagueAndSeasonAsync(leagueId, season, date);
+                var fixtures = await _footballService.GetFixturesByLeagueAndSeasonAsync(date);
                 return Ok(fixtures);
             }
             catch (Exception ex)
@@ -94,8 +94,6 @@ namespace CaseStudy.API.Controllers
                 // Eğer tarih belirtilmemişse bugünün tarihini kullan
                 var targetDate = date ?? DateTime.Now.ToString("yyyy-MM-dd");
                 var fixtures = await _footballService.GetFixturesByLeagueAndSeasonAsync(
-                    leagueId: premierLeague.League.Id,
-                    season: 2024,
                     date: targetDate
                 );
 
@@ -136,8 +134,6 @@ namespace CaseStudy.API.Controllers
                 // Bugünün maçlarını getir
                 var today = DateTime.Now.ToString("yyyy-MM-dd");
                 var fixtures = await _footballService.GetFixturesByLeagueAndSeasonAsync(
-                    leagueId: superLeague.League.Id,
-                    season: 2024,
                     date: today
                 );
 

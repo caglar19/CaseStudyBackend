@@ -26,7 +26,7 @@ namespace CaseStudy.Application.Services.Impl
             _httpClient.DefaultRequestHeaders.Add("x-rapidapi-host", "v3.football.api-sports.io");
         }
 
-        private async Task<ApiResponse<T>> GetApiResponseAsync<T>(string endpoint, Dictionary<string, string> queryParams = null)
+        private async Task<ApiResponse<T>> GetApiResponseAsync<T>(string endpoint, Dictionary<string, string>? queryParams = null)
         {
             try
             {
@@ -75,7 +75,7 @@ namespace CaseStudy.Application.Services.Impl
             }
         }
 
-        private async Task<List<T>> GetApiListResponseAsync<T>(string endpoint, Dictionary<string, string> queryParams = null)
+        private async Task<List<T>> GetApiListResponseAsync<T>(string endpoint, Dictionary<string, string>? queryParams = null)
         {
             var result = await GetApiResponseAsync<T>(endpoint, queryParams);
             return result.Response ?? new List<T>();
@@ -171,7 +171,7 @@ namespace CaseStudy.Application.Services.Impl
                     { "season", season.ToString() }
                 });
 
-        public async Task<List<Fixture>> GetFixturesAsync(int leagueId, int season, string date)
+        public async Task<List<Fixture>> GetFixturesAsync(string date)
         {
             var queryParams = new Dictionary<string, string>
             {

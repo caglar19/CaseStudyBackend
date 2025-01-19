@@ -6,6 +6,6 @@ namespace CaseStudy.Application.Interfaces
     {
         Task<List<CountryModel>> GetAvailableCountriesAsync();
         Task<List<LeagueModel>> GetLeaguesByCountryAsync(string countryCode);
-        Task<List<Fixture>> GetFixturesByLeagueAndSeasonAsync(int leagueId, int season, string date);
+        Task<List<Fixture>> GetFixturesByLeagueAndSeasonAsync( string date);
     }
 }
