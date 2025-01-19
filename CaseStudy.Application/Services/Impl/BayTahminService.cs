@@ -96,7 +96,7 @@ namespace CaseStudy.Application.Services.Impl
         #endregion
 
         #region Leagues
-        public Task<List<LeagueModel>> GetLeaguesAsync(string country = null)
+        public Task<List<LeagueModel>> GetLeaguesAsync(string country)
         {
             var queryParams = new Dictionary<string, string>();
             if (!string.IsNullOrEmpty(country))
@@ -171,14 +171,12 @@ namespace CaseStudy.Application.Services.Impl
                     { "season", season.ToString() }
                 });
 
-        public async Task<List<Fixture>> GetLiveFixturesAsync()
+        public async Task<List<Fixture>> GetFixturesAsync(int leagueId, int season, string date)
         {
-            var today = DateTime.Now.ToString("yyyy-MM-dd");
-            var currentTime = DateTime.Now.ToString("HH:mm:ss");
-
             var queryParams = new Dictionary<string, string>
             {
-                { "date", today }
+                { "status", "NS" },
+                { "date", date }
             };
 
             return await GetApiListResponseAsync<Fixture>("fixtures", queryParams);

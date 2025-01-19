@@ -28,7 +28,7 @@ namespace CaseStudy.Application.Interfaces
 
         // Fixtures
         Task<List<string>> GetFixtureRoundsAsync(int leagueId, int season);
-        Task<List<Fixture>> GetLiveFixturesAsync();
+        Task<List<Fixture>> GetFixturesAsync(int leagueId, int season, string date);
         Task<List<Fixture>> GetHeadToHeadFixturesAsync(string h2h);
         Task<List<FixtureStatistics>> GetFixtureStatisticsAsync(int fixtureId, int? teamId = null);
         Task<List<FixtureEvent>> GetFixtureEventsAsync(int fixtureId);

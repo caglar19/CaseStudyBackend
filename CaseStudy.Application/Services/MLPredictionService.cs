@@ -20,105 +20,105 @@ namespace CaseStudy.Application.Services
             _logger = logger;
         }
 
-        public async Task TrainModel()
-        {
-            try
-            {
-                // Eğitim verilerini hazırla
-                var trainingData = await PrepareTrainingData();
+        //public async Task TrainModel()
+        //{
+        //    try
+        //    {
+        //        // Eğitim verilerini hazırla
+        //        var trainingData = await PrepareTrainingData();
                 
-                // Veriyi ML.NET'in anlayacağı formata dönüştür
-                var trainingDataView = _mlContext.Data.LoadFromEnumerable(trainingData);
+        //        // Veriyi ML.NET'in anlayacağı formata dönüştür
+        //        var trainingDataView = _mlContext.Data.LoadFromEnumerable(trainingData);
 
-                // ML pipeline oluştur
-                var pipeline = _mlContext.Transforms.Conversion.MapValueToKey(outputColumnName: "Label")
-                    .Append(_mlContext.Transforms.Concatenate("Features",
-                        nameof(MatchPredictionData.HomeTeamRank),
-                        nameof(MatchPredictionData.AwayTeamRank),
-                        nameof(MatchPredictionData.HomeTeamForm),
-                        nameof(MatchPredictionData.AwayTeamForm),
-                        nameof(MatchPredictionData.HomeTeamGoalsScored),
-                        nameof(MatchPredictionData.AwayTeamGoalsScored),
-                        nameof(MatchPredictionData.HomeTeamGoalsConceded),
-                        nameof(MatchPredictionData.AwayTeamGoalsConceded),
-                        nameof(MatchPredictionData.H2HHomeWins),
-                        nameof(MatchPredictionData.H2HAwayWins),
-                        nameof(MatchPredictionData.HomeTeamInjuredPlayers),
-                        nameof(MatchPredictionData.AwayTeamInjuredPlayers)))
-                    .Append(_mlContext.MulticlassClassification.Trainers.LbfgsMaximumEntropy())
-                    .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
+        //        // ML pipeline oluştur
+        //        var pipeline = _mlContext.Transforms.Conversion.MapValueToKey(outputColumnName: "Label")
+        //            .Append(_mlContext.Transforms.Concatenate("Features",
+        //                nameof(MatchPredictionData.HomeTeamRank),
+        //                nameof(MatchPredictionData.AwayTeamRank),
+        //                nameof(MatchPredictionData.HomeTeamForm),
+        //                nameof(MatchPredictionData.AwayTeamForm),
+        //                nameof(MatchPredictionData.HomeTeamGoalsScored),
+        //                nameof(MatchPredictionData.AwayTeamGoalsScored),
+        //                nameof(MatchPredictionData.HomeTeamGoalsConceded),
+        //                nameof(MatchPredictionData.AwayTeamGoalsConceded),
+        //                nameof(MatchPredictionData.H2HHomeWins),
+        //                nameof(MatchPredictionData.H2HAwayWins),
+        //                nameof(MatchPredictionData.HomeTeamInjuredPlayers),
+        //                nameof(MatchPredictionData.AwayTeamInjuredPlayers)))
+        //            .Append(_mlContext.MulticlassClassification.Trainers.LbfgsMaximumEntropy())
+        //            .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
-                // Modeli eğit
-                _trainedModel = pipeline.Fit(trainingDataView);
+        //        // Modeli eğit
+        //        _trainedModel = pipeline.Fit(trainingDataView);
 
-                // Modeli değerlendir
-                var predictions = _trainedModel.Transform(trainingDataView);
-                var metrics = _mlContext.MulticlassClassification.Evaluate(predictions);
+        //        // Modeli değerlendir
+        //        var predictions = _trainedModel.Transform(trainingDataView);
+        //        var metrics = _mlContext.MulticlassClassification.Evaluate(predictions);
 
-                _logger.LogInformation($"Macro Accuracy: {metrics.MacroAccuracy}");
-                _logger.LogInformation($"Micro Accuracy: {metrics.MicroAccuracy}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Model eğitimi sırasında hata oluştu");
-                throw;
-            }
-        }
+        //        _logger.LogInformation($"Macro Accuracy: {metrics.MacroAccuracy}");
+        //        _logger.LogInformation($"Micro Accuracy: {metrics.MicroAccuracy}");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Model eğitimi sırasında hata oluştu");
+        //        throw;
+        //    }
+        //}
 
-        public async Task<PredictionAnalysis> PredictMatch(int matchId)
-        {
-            try
-            {
-                var match = await _bayTahminService.GetMatchByIdAsync(matchId);
-                var homeTeam = await _bayTahminService.GetTeamByIdAsync(match.HomeTeamId);
-                var awayTeam = await _bayTahminService.GetTeamByIdAsync(match.AwayTeamId);
+        //public async Task<PredictionAnalysis> PredictMatch(int matchId)
+        //{
+        //    try
+        //    {
+        //        var match = await _bayTahminService.GetMatchByIdAsync(matchId);
+        //        var homeTeam = await _bayTahminService.GetTeamByIdAsync(match.HomeTeamId);
+        //        var awayTeam = await _bayTahminService.GetTeamByIdAsync(match.AwayTeamId);
 
-                // Tahmin için veriyi hazırla
-                var predictionData = new MatchPredictionData
-                {
-                    HomeTeamRank = await GetTeamRank(homeTeam.Team.Id),
-                    AwayTeamRank = await GetTeamRank(awayTeam.Team.Id),
-                    HomeTeamForm = await CalculateTeamForm(homeTeam.Team.Id),
-                    AwayTeamForm = await CalculateTeamForm(awayTeam.Team.Id),
-                    HomeTeamGoalsScored = await GetTeamGoalsScored(homeTeam.Team.Id),
-                    AwayTeamGoalsScored = await GetTeamGoalsScored(awayTeam.Team.Id),
-                    HomeTeamGoalsConceded = await GetTeamGoalsConceded(homeTeam.Team.Id),
-                    AwayTeamGoalsConceded = await GetTeamGoalsConceded(awayTeam.Team.Id),
-                    H2HHomeWins = await GetH2HWins(homeTeam.Team.Id, awayTeam.Team.Id),
-                    H2HAwayWins = await GetH2HWins(awayTeam.Team.Id, homeTeam.Team.Id),
-                    HomeTeamInjuredPlayers = await GetInjuredPlayersCount(homeTeam.Team.Id),
-                    AwayTeamInjuredPlayers = await GetInjuredPlayersCount(awayTeam.Team.Id)
-                };
+        //        // Tahmin için veriyi hazırla
+        //        var predictionData = new MatchPredictionData
+        //        {
+        //            HomeTeamRank = await GetTeamRank(homeTeam.Team.Id),
+        //            AwayTeamRank = await GetTeamRank(awayTeam.Team.Id),
+        //            HomeTeamForm = await CalculateTeamForm(homeTeam.Team.Id),
+        //            AwayTeamForm = await CalculateTeamForm(awayTeam.Team.Id),
+        //            HomeTeamGoalsScored = await GetTeamGoalsScored(homeTeam.Team.Id),
+        //            AwayTeamGoalsScored = await GetTeamGoalsScored(awayTeam.Team.Id),
+        //            HomeTeamGoalsConceded = await GetTeamGoalsConceded(homeTeam.Team.Id),
+        //            AwayTeamGoalsConceded = await GetTeamGoalsConceded(awayTeam.Team.Id),
+        //            H2HHomeWins = await GetH2HWins(homeTeam.Team.Id, awayTeam.Team.Id),
+        //            H2HAwayWins = await GetH2HWins(awayTeam.Team.Id, homeTeam.Team.Id),
+        //            HomeTeamInjuredPlayers = await GetInjuredPlayersCount(homeTeam.Team.Id),
+        //            AwayTeamInjuredPlayers = await GetInjuredPlayersCount(awayTeam.Team.Id)
+        //        };
 
-                // Tahmin yap
-                var predictionEngine = _mlContext.Model.CreatePredictionEngine<MatchPredictionData, MatchPredictionOutput>(_trainedModel);
-                var prediction = predictionEngine.Predict(predictionData);
+        //        // Tahmin yap
+        //        var predictionEngine = _mlContext.Model.CreatePredictionEngine<MatchPredictionData, MatchPredictionOutput>(_trainedModel);
+        //        var prediction = predictionEngine.Predict(predictionData);
 
-                // Analiz oluştur
-                return new PredictionAnalysis
-                {
-                    MatchId = matchId,
-                    HomeTeam = homeTeam.Team.Name, // Fix: Accessing the Name property of the Team object
-                    AwayTeam = awayTeam.Team.Name, // Fix: Accessing the Name property of the Team object
-                    PredictedResult = prediction.PredictedResult,
-                    HomeWinProbability = prediction.Score[0],
-                    DrawProbability = prediction.Score[1],
-                    AwayWinProbability = prediction.Score[2],
-                    AnalysisFactors = new List<AnalysisFactor>
-                    {
-                        new AnalysisFactor { Factor = "Form", Description = AnalyzeForm(predictionData.HomeTeamForm, predictionData.AwayTeamForm) },
-                        new AnalysisFactor { Factor = "Goals", Description = AnalyzeGoals(predictionData) },
-                        new AnalysisFactor { Factor = "H2H", Description = AnalyzeH2H(predictionData.H2HHomeWins, predictionData.H2HAwayWins) },
-                        new AnalysisFactor { Factor = "Injuries", Description = AnalyzeInjuries(predictionData.HomeTeamInjuredPlayers, predictionData.AwayTeamInjuredPlayers) }
-                    }
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Maç tahmini sırasında hata oluştu. MatchId: {matchId}");
-                throw;
-            }
-        }
+        //        // Analiz oluştur
+        //        return new PredictionAnalysis
+        //        {
+        //            MatchId = matchId,
+        //            HomeTeam = homeTeam.Team.Name, // Fix: Accessing the Name property of the Team object
+        //            AwayTeam = awayTeam.Team.Name, // Fix: Accessing the Name property of the Team object
+        //            PredictedResult = prediction.PredictedResult,
+        //            HomeWinProbability = prediction.Score[0],
+        //            DrawProbability = prediction.Score[1],
+        //            AwayWinProbability = prediction.Score[2],
+        //            AnalysisFactors = new List<AnalysisFactor>
+        //            {
+        //                new AnalysisFactor { Factor = "Form", Description = AnalyzeForm(predictionData.HomeTeamForm, predictionData.AwayTeamForm) },
+        //                new AnalysisFactor { Factor = "Goals", Description = AnalyzeGoals(predictionData) },
+        //                new AnalysisFactor { Factor = "H2H", Description = AnalyzeH2H(predictionData.H2HHomeWins, predictionData.H2HAwayWins) },
+        //                new AnalysisFactor { Factor = "Injuries", Description = AnalyzeInjuries(predictionData.HomeTeamInjuredPlayers, predictionData.AwayTeamInjuredPlayers) }
+        //            }
+        //        };
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, $"Maç tahmini sırasında hata oluştu. MatchId: {matchId}");
+        //        throw;
+        //    }
+        //}
 
         private async Task<List<MatchPredictionData>> PrepareTrainingData()
         {

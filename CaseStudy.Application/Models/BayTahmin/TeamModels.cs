@@ -35,6 +35,9 @@ namespace CaseStudy.Application.Models.BayTahmin
 
         [JsonPropertyName("logo")]
         public string Logo { get; set; }
+
+        [JsonPropertyName("winner")]
+        public bool? Winner { get; set; }
     }
 
     public class VenueInfo
@@ -52,7 +55,7 @@ namespace CaseStudy.Application.Models.BayTahmin
         public string City { get; set; }
 
         [JsonPropertyName("capacity")]
-        public int Capacity { get; set; }
+        public int? Capacity { get; set; }
 
         [JsonPropertyName("surface")]
         public string Surface { get; set; }

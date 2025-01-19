@@ -147,9 +147,9 @@ namespace CaseStudy.API.Controllers
         #region Fixtures
         [HttpGet("fixtures/day")]
         [ProducesResponseType(typeof(IEnumerable<Fixture>), StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<Fixture>>> GetLiveFixtures()
+        public async Task<ActionResult<IEnumerable<Fixture>>> GetLDayFixtures([FromQuery] int leagueId, [FromQuery] int season, [FromQuery] string date)
         {
-            var fixtures = await _bayTahminService.GetLiveFixturesAsync();
+            var fixtures = await _bayTahminService.GetFixturesAsync(leagueId, season, date);
             return Ok(fixtures);
         }
 
