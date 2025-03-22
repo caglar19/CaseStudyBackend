@@ -174,9 +174,9 @@ namespace CaseStudy.API.Controllers
 
         [HttpGet("fixtures/{id}/statistics")]
         [ProducesResponseType(typeof(IEnumerable<FixtureStatistics>), StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<FixtureStatistics>>> GetFixtureStatistics(int id, [FromQuery] int? teamId = null)
+        public async Task<ActionResult<IEnumerable<FixtureStatistics>>> GetFixtureStatistics(int id)
         {
-            var stats = await _bayTahminService.GetFixtureStatisticsAsync(id, teamId);
+            var stats = await _bayTahminService.GetFixtureStatisticsAsync(id);
             return Ok(stats);
         }
 

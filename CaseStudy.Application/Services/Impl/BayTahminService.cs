@@ -191,10 +191,9 @@ namespace CaseStudy.Application.Services.Impl
             return response.Response?.FirstOrDefault() ?? throw new InvalidOperationException("Match not found");
         }
 
-        public Task<List<FixtureStatistics>> GetFixtureStatisticsAsync(int fixtureId, int? teamId = null)
+        public Task<List<FixtureStatistics>> GetFixtureStatisticsAsync(int fixtureId)
         {
             var queryParams = new Dictionary<string, string> { { "fixture", fixtureId.ToString() } };
-            if (teamId.HasValue) queryParams.Add("team", teamId.ToString());
             
             return GetApiListResponseAsync<FixtureStatistics>("fixtures/statistics", queryParams);
         }
@@ -303,6 +302,14 @@ namespace CaseStudy.Application.Services.Impl
         {
             var response = await GetApiResponseAsync<BetInfo>("odds/bets");
             return response.Response ?? new List<BetInfo>();
+        }
+        #endregion
+
+        #region Predictions
+        public async Task<Prediction> GetPredictionAsync(int fixtureId)
+        {
+            var response = await GetApiResponseAsync<Prediction>("predictions", new Dictionary<string, string> { { "fixture", fixtureId.ToString() } });
+            return response.Response.FirstOrDefault();
         }
         #endregion
 

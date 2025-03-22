@@ -30,9 +30,10 @@ namespace CaseStudy.Application.Interfaces
         Task<List<string>> GetFixtureRoundsAsync(int leagueId, int season);
         Task<List<Fixture>> GetFixturesAsync(string date);
         Task<List<Fixture>> GetHeadToHeadFixturesAsync(string h2h);
-        Task<List<FixtureStatistics>> GetFixtureStatisticsAsync(int fixtureId, int? teamId = null);
-        Task<List<FixtureEvent>> GetFixtureEventsAsync(int fixtureId);
+        Task<List<FixtureStatistics>> GetFixtureStatisticsAsync(int fixtureId);
         Task<List<FixtureLineup>> GetFixtureLineupsAsync(int fixtureId);
+        Task<Prediction> GetPredictionAsync(int fixtureId);
+        Task<List<FixtureEvent>> GetFixtureEventsAsync(int fixtureId);
         Task<List<FixturePlayer>> GetFixturePlayersAsync(int fixtureId);
 
         // Injuries

@@ -78,19 +78,34 @@ namespace CaseStudy.API.Controllers
                 sayfa.Cells[1, 3].Value = "Lig";
                 sayfa.Cells[1, 4].Value = "Ev Sahibi";
                 sayfa.Cells[1, 5].Value = "Deplasman";
-                sayfa.Cells[1, 6].Value = "Skor (İY)";
-                sayfa.Cells[1, 7].Value = "Skor";
-                sayfa.Cells[1, 8].Value = "Ev Sahibi Sıra";
-                sayfa.Cells[1, 9].Value = "Deplasman Sıra";
-                sayfa.Cells[1, 10].Value = "Ev Sahibi Gol İst. (A/Y)";
-                sayfa.Cells[1, 11].Value = "Deplasman Gol İst. (A/Y)";
-                sayfa.Cells[1, 12].Value = "Stadyum";
-                sayfa.Cells[1, 13].Value = "Şehir";
-                sayfa.Cells[1, 14].Value = "Hakem";
-                sayfa.Cells[1, 15].Value = "Durum";
+                sayfa.Cells[1, 6].Value = "Kazanan Tahmini";
+                sayfa.Cells[1, 7].Value = "Kazanma Yüzdesi (Ev)";
+                sayfa.Cells[1, 8].Value = "Beraberlik Yüzdesi";
+                sayfa.Cells[1, 9].Value = "Kazanma Yüzdesi (Dep)";
+                sayfa.Cells[1, 10].Value = "Form Karşılaştırması (Ev/Dep)";
+                sayfa.Cells[1, 11].Value = "Hücum Karşılaştırması (Ev/Dep)";
+                sayfa.Cells[1, 12].Value = "Savunma Karşılaştırması (Ev/Dep)";
+                sayfa.Cells[1, 13].Value = "Skor (İY)";
+                sayfa.Cells[1, 14].Value = "Skor";
+                sayfa.Cells[1, 15].Value = "Lig Sırası (Ev)";
+                sayfa.Cells[1, 16].Value = "Lig Sırası (Dep)";
+                sayfa.Cells[1, 17].Value = "Gol (Ev)";
+                sayfa.Cells[1, 18].Value = "Gol (Dep)";
+                sayfa.Cells[1, 19].Value = "Stadyum";
+                sayfa.Cells[1, 20].Value = "Şehir";
+                sayfa.Cells[1, 21].Value = "Hakem";
+                sayfa.Cells[1, 22].Value = "Durum";
+                sayfa.Cells[1, 23].Value = "Tahmin";
+                sayfa.Cells[1, 24].Value = "Kazanma %";
+                sayfa.Cells[1, 25].Value = "Beraberlik %";
+                sayfa.Cells[1, 26].Value = "Form";
+                sayfa.Cells[1, 27].Value = "Hücum";
+                sayfa.Cells[1, 28].Value = "Savunma";
+                sayfa.Cells[1, 29].Value = "H2H";
+                sayfa.Cells[1, 30].Value = "Toplam";
 
                 // Başlık stilini ayarla
-                var baslikAraligi = sayfa.Cells[1, 1, 1, 15];
+                var baslikAraligi = sayfa.Cells[1, 1, 1, 30];
                 baslikAraligi.Style.Font.Bold = true;
                 baslikAraligi.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
                 baslikAraligi.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
@@ -111,18 +126,67 @@ namespace CaseStudy.API.Controllers
                     sayfa.Cells[satir, 3].Value = mac.League?.Name;
                     sayfa.Cells[satir, 4].Value = mac.Teams?.Home?.Name;
                     sayfa.Cells[satir, 5].Value = mac.Teams?.Away?.Name;
-                    sayfa.Cells[satir, 6].Value = mac.Score?.Halftime?.Home != null && mac.Score?.Halftime?.Away != null ? $"{mac.Score.Halftime.Home}-{mac.Score.Halftime.Away}" : "-";
-                    sayfa.Cells[satir, 7].Value = mac.Score?.Fulltime?.Home != null && mac.Score?.Fulltime?.Away != null ? $"{mac.Score.Fulltime.Home}-{mac.Score.Fulltime.Away}" : "-";
-                    sayfa.Cells[satir, 8].Value = mac.Info?.LeagueStanding?.HomePosition;
-                    sayfa.Cells[satir, 9].Value = mac.Info?.LeagueStanding?.AwayPosition;
-                    sayfa.Cells[satir, 10].Value = mac.Info?.LeagueStanding != null ? 
+
+                    // Tahmin verilerini al
+                    var prediction = await _bayTahminService.GetPredictionAsync(mac.Info.Id);
+                    if (prediction != null)
+                    {
+                        sayfa.Cells[satir, 6].Value = prediction.Predictions?.Winner?.Name ?? "-";
+                        sayfa.Cells[satir, 7].Value = prediction.Predictions?.Percent?.Home ?? "-";
+                        sayfa.Cells[satir, 8].Value = prediction.Predictions?.Percent?.Draw ?? "-";
+                        sayfa.Cells[satir, 9].Value = prediction.Predictions?.Percent?.Away ?? "-";
+                        sayfa.Cells[satir, 10].Value = $"{prediction.Comparison?.Form?.Home ?? "-"}/{prediction.Comparison?.Form?.Away ?? "-"}";
+                        sayfa.Cells[satir, 11].Value = $"{prediction.Comparison?.Att?.Home ?? "-"}/{prediction.Comparison?.Att?.Away ?? "-"}";
+                        sayfa.Cells[satir, 12].Value = $"{prediction.Comparison?.Def?.Home ?? "-"}/{prediction.Comparison?.Def?.Away ?? "-"}";
+                    }
+                    else
+                    {
+                        sayfa.Cells[satir, 6].Value = "-";
+                        sayfa.Cells[satir, 7].Value = "-";
+                        sayfa.Cells[satir, 8].Value = "-";
+                        sayfa.Cells[satir, 9].Value = "-";
+                        sayfa.Cells[satir, 10].Value = "-";
+                        sayfa.Cells[satir, 11].Value = "-";
+                        sayfa.Cells[satir, 12].Value = "-";
+                    }
+
+                    sayfa.Cells[satir, 13].Value = mac.Score?.Halftime?.Home != null && mac.Score?.Halftime?.Away != null ? $"{mac.Score.Halftime.Home}-{mac.Score.Halftime.Away}" : "-";
+                    sayfa.Cells[satir, 14].Value = mac.Score?.Fulltime?.Home != null && mac.Score?.Fulltime?.Away != null ? $"{mac.Score.Fulltime.Home}-{mac.Score.Fulltime.Away}" : "-";
+                    sayfa.Cells[satir, 15].Value = mac.Info?.LeagueStanding?.HomePosition;
+                    sayfa.Cells[satir, 16].Value = mac.Info?.LeagueStanding?.AwayPosition;
+                    sayfa.Cells[satir, 17].Value = mac.Info?.LeagueStanding != null ? 
                         $"{mac.Info.LeagueStanding.HomeGoalsFor}-{mac.Info.LeagueStanding.HomeGoalsAgainst}" : "-";
-                    sayfa.Cells[satir, 11].Value = mac.Info?.LeagueStanding != null ? 
+                    sayfa.Cells[satir, 18].Value = mac.Info?.LeagueStanding != null ? 
                         $"{mac.Info.LeagueStanding.AwayGoalsFor}-{mac.Info.LeagueStanding.AwayGoalsAgainst}" : "-";
-                    sayfa.Cells[satir, 12].Value = mac.Info?.Venue?.Name;
-                    sayfa.Cells[satir, 13].Value = mac.Info?.Venue?.City;
-                    sayfa.Cells[satir, 14].Value = mac.Info?.Referee;
-                    sayfa.Cells[satir, 15].Value = mac.Info?.Status?.Long;
+                    sayfa.Cells[satir, 19].Value = mac.Info?.Venue?.Name;
+                    sayfa.Cells[satir, 20].Value = mac.Info?.Venue?.City;
+                    sayfa.Cells[satir, 21].Value = mac.Info?.Referee;
+                    sayfa.Cells[satir, 22].Value = mac.Info?.Status?.Long;
+
+                    // Tahmin verilerini al
+                    var tahmin = await _bayTahminService.GetPredictionAsync(mac.Info.Id);
+                    if (tahmin != null)
+                    {
+                        // Tahmin ve yüzdeler
+                        sayfa.Cells[satir, 23].Value = tahmin.Predictions?.Advice;
+                        
+                        var homePercent = tahmin.Predictions?.Percent?.Home?.TrimEnd('%') ?? "0";
+                        var drawPercent = tahmin.Predictions?.Percent?.Draw?.TrimEnd('%') ?? "0";
+                        var awayPercent = tahmin.Predictions?.Percent?.Away?.TrimEnd('%') ?? "0";
+                        
+                        sayfa.Cells[satir, 24].Value = $"{homePercent}% - {awayPercent}%";
+                        sayfa.Cells[satir, 25].Value = drawPercent + "%";
+
+                        // Karşılaştırma verileri
+                        if (tahmin.Comparison != null)
+                        {
+                            sayfa.Cells[satir, 26].Value = $"{tahmin.Comparison.Form?.Home ?? "0%"} - {tahmin.Comparison.Form?.Away ?? "0%"}";
+                            sayfa.Cells[satir, 27].Value = $"{tahmin.Comparison.Att?.Home ?? "0%"} - {tahmin.Comparison.Att?.Away ?? "0%"}";
+                            sayfa.Cells[satir, 28].Value = $"{tahmin.Comparison.Def?.Home ?? "0%"} - {tahmin.Comparison.Def?.Away ?? "0%"}";
+                            sayfa.Cells[satir, 29].Value = $"{tahmin.Comparison.H2h?.Home ?? "0%"} - {tahmin.Comparison.H2h?.Away ?? "0%"}";
+                            sayfa.Cells[satir, 30].Value = $"{tahmin.Comparison.Total?.Home ?? "0%"} - {tahmin.Comparison.Total?.Away ?? "0%"}";
+                        }
+                    }
 
                     // Kazanan takımı yeşil, kaybedeni kırmızı yap
                     if (mac.Score?.Fulltime?.Home != null && mac.Score?.Fulltime?.Away != null)
@@ -149,7 +213,7 @@ namespace CaseStudy.API.Controllers
                     // Alternatif satır renklendirmesi
                     if (satir % 2 == 0)
                     {
-                        var aralik = sayfa.Cells[satir, 1, satir, 15];
+                        var aralik = sayfa.Cells[satir, 1, satir, 30];
                         aralik.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
                         aralik.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(242, 242, 242));
                     }
@@ -157,117 +221,18 @@ namespace CaseStudy.API.Controllers
                     satir++;
                 }
 
-                // Maç sayısı ve skor ortalaması
-                var macSayisi = maclar.Count;
-                var toplamGol = maclar
-                    .Where(m => m.Score?.Fulltime?.Home != null && m.Score?.Fulltime?.Away != null)
-                    .Sum(m => (m.Score.Fulltime.Home ?? 0) + (m.Score.Fulltime.Away ?? 0));
-                var golOrtalamasi = macSayisi > 0 ? (double)toplamGol / macSayisi : 0;
-
-                // İlk yarı ve ikinci yarı gol ortalamaları
-                var ilkYariGol = maclar
-                    .Where(m => m.Score?.Halftime?.Home != null && m.Score?.Halftime?.Away != null)
-                    .Sum(m => (m.Score.Halftime.Home ?? 0) + (m.Score.Halftime.Away ?? 0));
-                var ilkYariOrtalamasi = macSayisi > 0 ? (double)ilkYariGol / macSayisi : 0;
-
-                var ikinciYariGol = maclar
-                    .Where(m => m.Score?.Fulltime?.Home != null && m.Score?.Fulltime?.Away != null &&
-                               m.Score?.Halftime?.Home != null && m.Score?.Halftime?.Away != null)
-                    .Sum(m => ((m.Score.Fulltime.Home ?? 0) + (m.Score.Fulltime.Away ?? 0)) -
-                             ((m.Score.Halftime.Home ?? 0) + (m.Score.Halftime.Away ?? 0)));
-                var ikinciYariOrtalamasi = macSayisi > 0 ? (double)ikinciYariGol / macSayisi : 0;
-
-                // Gol dağılımı
-                var golDagilimi = maclar
-                    .Where(m => m.Score?.Fulltime?.Home != null && m.Score?.Fulltime?.Away != null)
-                    .GroupBy(m => (m.Score.Fulltime.Home ?? 0) + (m.Score.Fulltime.Away ?? 0))
-                    .OrderBy(g => g.Key)
-                    .Select(g => new { ToplamGol = g.Key, MacSayisi = g.Count() })
-                    .ToList();
-
-                // İstatistik özeti ekle
-                satir += 2;
-                sayfa.Cells[satir, 1].Value = "İstatistik Özeti";
-                sayfa.Cells[satir, 1, satir, 15].Merge = true;
-                sayfa.Cells[satir, 1].Style.Font.Bold = true;
-                sayfa.Cells[satir, 1].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
-                
-                satir++;
-                sayfa.Cells[satir, 1].Value = "Toplam Maç:";
-                sayfa.Cells[satir, 2].Value = macSayisi;
-                
-                satir++;
-                sayfa.Cells[satir, 1].Value = "Toplam Gol:";
-                sayfa.Cells[satir, 2].Value = toplamGol;
-                
-                satir++;
-                sayfa.Cells[satir, 1].Value = "Gol Ortalaması:";
-                sayfa.Cells[satir, 2].Value = golOrtalamasi.ToString("F2");
-                
-                satir++;
-                sayfa.Cells[satir, 1].Value = "İlk Yarı Gol Ortalaması:";
-                sayfa.Cells[satir, 2].Value = ilkYariOrtalamasi.ToString("F2");
-                
-                satir++;
-                sayfa.Cells[satir, 1].Value = "İkinci Yarı Gol Ortalaması:";
-                sayfa.Cells[satir, 2].Value = ikinciYariOrtalamasi.ToString("F2");
-
-                // Gol dağılımı sayfası
-                var golDagilimiSayfa = paket.Workbook.Worksheets.Add("Gol Dağılımı");
-
-                // Başlıkları ekle
-                golDagilimiSayfa.Cells[1, 1].Value = "Toplam Gol";
-                golDagilimiSayfa.Cells[1, 2].Value = "Maç Sayısı";
-
-                // Başlık stilini ayarla
-                var golDagilimiBaslikAraligi = golDagilimiSayfa.Cells[1, 1, 1, 2];
-                golDagilimiBaslikAraligi.Style.Font.Bold = true;
-                golDagilimiBaslikAraligi.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
-                golDagilimiBaslikAraligi.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
-
-                // Gol dağılımı verilerini ekle
-                int golDagilimiSatir = 2;
-                foreach (var gol in golDagilimi)
-                {
-                    golDagilimiSayfa.Cells[golDagilimiSatir, 1].Value = gol.ToplamGol;
-                    golDagilimiSayfa.Cells[golDagilimiSatir, 2].Value = gol.MacSayisi;
-
-                    // Alternatif satır renklendirmesi
-                    if (golDagilimiSatir % 2 == 0)
-                    {
-                        var aralik = golDagilimiSayfa.Cells[golDagilimiSatir, 1, golDagilimiSatir, 2];
-                        aralik.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
-                        aralik.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(242, 242, 242));
-                    }
-
-                    golDagilimiSatir++;
-                }
-
-                // Gol dağılımı sayfası için sütunları otomatik boyutlandır
-                golDagilimiSayfa.Cells.AutoFitColumns();
-
-                // Gol dağılımı sayfası için border ekle
-                var golDagilimiVeriAraligi = golDagilimiSayfa.Cells[1, 1, golDagilimiSatir - 1, 2];
-                golDagilimiVeriAraligi.Style.Border.Top.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
-                golDagilimiVeriAraligi.Style.Border.Left.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
-                golDagilimiVeriAraligi.Style.Border.Right.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
-                golDagilimiVeriAraligi.Style.Border.Bottom.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
-
-                // Gol dağılımı sayfası için filtre ekle
-                golDagilimiSayfa.Cells[1, 1, 1, 2].AutoFilter = true;
-
                 // Sütunları otomatik boyutlandır
                 sayfa.Cells.AutoFitColumns();
 
                 // Tüm hücrelere border ekle
-                var veriAraligi = sayfa.Cells[1, 1, satir, 15];
+                var veriAraligi = sayfa.Cells[1, 1, satir, 30];
                 veriAraligi.Style.Border.Top.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
                 veriAraligi.Style.Border.Left.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
                 veriAraligi.Style.Border.Right.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
                 veriAraligi.Style.Border.Bottom.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
 
                 // Filtre ekle
-                sayfa.Cells[1, 1, 1, 15].AutoFilter = true;
+                sayfa.Cells[1, 1, 1, 30].AutoFilter = true;
 
                 // Dosya adı oluştur
                 string dosyaAdi = $"Maclar_{date}_{(filterByLeague ? "SeciliLigler" : "TumLigler")}_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
@@ -329,9 +294,20 @@ namespace CaseStudy.API.Controllers
                 sayfa.Cells[1, 11].Value = "Şehir";
                 sayfa.Cells[1, 12].Value = "Hakem";
                 sayfa.Cells[1, 13].Value = "Durum";
+                sayfa.Cells[1, 14].Value = "Şut";
+                sayfa.Cells[1, 15].Value = "İsabetli Şut";
+                sayfa.Cells[1, 16].Value = "Top Hakimiyeti";
+                sayfa.Cells[1, 17].Value = "Korner";
+                sayfa.Cells[1, 18].Value = "Ofsayt";
+                sayfa.Cells[1, 19].Value = "Faul";
+                sayfa.Cells[1, 20].Value = "Sarı Kart";
+                sayfa.Cells[1, 21].Value = "Kırmızı Kart";
+                sayfa.Cells[1, 22].Value = "Diziliş";
+                sayfa.Cells[1, 23].Value = "İlk 11";
+                sayfa.Cells[1, 24].Value = "Yedekler";
 
                 // Başlık stilini ayarla
-                var baslikAraligi = sayfa.Cells[1, 1, 1, 13];
+                var baslikAraligi = sayfa.Cells[1, 1, 1, 24];
                 baslikAraligi.Style.Font.Bold = true;
                 baslikAraligi.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
                 baslikAraligi.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
@@ -399,6 +375,45 @@ namespace CaseStudy.API.Controllers
                     sayfa.Cells[satir, 12].Value = mac.Info?.Referee;
                     sayfa.Cells[satir, 13].Value = mac.Info?.Status?.Long;
 
+                    // Maç istatistiklerini al
+                    var istatistikler = await _bayTahminService.GetFixtureStatisticsAsync(mac.Info.Id);
+                    if (istatistikler?.Count > 0)
+                    {
+                        var homeStats = istatistikler.FirstOrDefault(s => s.Team?.Id == mac.Teams?.Home?.Id)?.Statistics;
+                        var awayStats = istatistikler.FirstOrDefault(s => s.Team?.Id == mac.Teams?.Away?.Id)?.Statistics;
+
+                        // İstatistikleri ekle
+                        sayfa.Cells[satir, 14].Value = $"Şut: {homeStats?.FirstOrDefault(s => s.Type == "Total Shots")?.Value ?? "0"}-{awayStats?.FirstOrDefault(s => s.Type == "Total Shots")?.Value ?? "0"}";
+                        sayfa.Cells[satir, 15].Value = $"İsabetli Şut: {homeStats?.FirstOrDefault(s => s.Type == "Shots on Goal")?.Value ?? "0"}-{awayStats?.FirstOrDefault(s => s.Type == "Shots on Goal")?.Value ?? "0"}";
+                        sayfa.Cells[satir, 16].Value = $"Top Hakimiyeti: {homeStats?.FirstOrDefault(s => s.Type == "Ball Possession")?.Value ?? "0"}-{awayStats?.FirstOrDefault(s => s.Type == "Ball Possession")?.Value ?? "0"}";
+                        sayfa.Cells[satir, 17].Value = $"Korner: {homeStats?.FirstOrDefault(s => s.Type == "Corner Kicks")?.Value ?? "0"}-{awayStats?.FirstOrDefault(s => s.Type == "Corner Kicks")?.Value ?? "0"}";
+                        sayfa.Cells[satir, 18].Value = $"Ofsayt: {homeStats?.FirstOrDefault(s => s.Type == "Offsides")?.Value ?? "0"}-{awayStats?.FirstOrDefault(s => s.Type == "Offsides")?.Value ?? "0"}";
+                        sayfa.Cells[satir, 19].Value = $"Faul: {homeStats?.FirstOrDefault(s => s.Type == "Fouls")?.Value ?? "0"}-{awayStats?.FirstOrDefault(s => s.Type == "Fouls")?.Value ?? "0"}";
+                        sayfa.Cells[satir, 20].Value = $"Sarı Kart: {homeStats?.FirstOrDefault(s => s.Type == "Yellow Cards")?.Value ?? "0"}-{awayStats?.FirstOrDefault(s => s.Type == "Yellow Cards")?.Value ?? "0"}";
+                        sayfa.Cells[satir, 21].Value = $"Kırmızı Kart: {homeStats?.FirstOrDefault(s => s.Type == "Red Cards")?.Value ?? "0"}-{awayStats?.FirstOrDefault(s => s.Type == "Red Cards")?.Value ?? "0"}";
+                    }
+
+                    // Kadro bilgilerini al
+                    var kadrolar = await _bayTahminService.GetFixtureLineupsAsync(mac.Info.Id);
+                    if (kadrolar?.Count > 0)
+                    {
+                        var homeLineup = kadrolar.FirstOrDefault(s => s.Team?.Id == mac.Teams?.Home?.Id);
+                        var awayLineup = kadrolar.FirstOrDefault(s => s.Team?.Id == mac.Teams?.Away?.Id);
+
+                        // Dizilişleri ekle
+                        sayfa.Cells[satir, 22].Value = $"{homeLineup?.Formation ?? "-"} - {awayLineup?.Formation ?? "-"}";
+
+                        // İlk 11'leri ekle
+                        var homeStartXI = string.Join(", ", homeLineup?.StartXI?.Select(p => p.Player?.Name) ?? Array.Empty<string>());
+                        var awayStartXI = string.Join(", ", awayLineup?.StartXI?.Select(p => p.Player?.Name) ?? Array.Empty<string>());
+                        sayfa.Cells[satir, 23].Value = $"{homeStartXI} | {awayStartXI}";
+
+                        // Yedekleri ekle
+                        var homeSubs = string.Join(", ", homeLineup?.Substitutes?.Select(p => p.Player?.Name) ?? Array.Empty<string>());
+                        var awaySubs = string.Join(", ", awayLineup?.Substitutes?.Select(p => p.Player?.Name) ?? Array.Empty<string>());
+                        sayfa.Cells[satir, 24].Value = $"{homeSubs} | {awaySubs}";
+                    }
+
                     // Kazanan takımı belirle
                     if (mac.Score?.Fulltime?.Home != null && mac.Score?.Fulltime?.Away != null)
                     {
@@ -415,7 +430,7 @@ namespace CaseStudy.API.Controllers
                     // Alternatif satır renklendirmesi
                     if (satir % 2 == 0)
                     {
-                        var aralik = sayfa.Cells[satir, 1, satir, 13];
+                        var aralik = sayfa.Cells[satir, 1, satir, 24];
                         aralik.Style.Fill.PatternType = OfficeOpenXml.Style.ExcelFillStyle.Solid;
                         aralik.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.FromArgb(242, 242, 242));
                     }
@@ -444,7 +459,7 @@ namespace CaseStudy.API.Controllers
                 // İstatistik özeti ekle
                 satir += 2;
                 sayfa.Cells[satir, 1].Value = "İstatistik Özeti";
-                sayfa.Cells[satir, 1, satir, 13].Merge = true;
+                sayfa.Cells[satir, 1, satir, 24].Merge = true;
                 sayfa.Cells[satir, 1].Style.Font.Bold = true;
                 sayfa.Cells[satir, 1].Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
                 
@@ -550,14 +565,14 @@ namespace CaseStudy.API.Controllers
                 sayfa.Cells.AutoFitColumns();
 
                 // Tüm hücrelere border ekle
-                var veriAraligi = sayfa.Cells[1, 1, satir, 13];
+                var veriAraligi = sayfa.Cells[1, 1, satir, 24];
                 veriAraligi.Style.Border.Top.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
                 veriAraligi.Style.Border.Left.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
                 veriAraligi.Style.Border.Right.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
                 veriAraligi.Style.Border.Bottom.Style = OfficeOpenXml.Style.ExcelBorderStyle.Thin;
 
                 // Filtre ekle
-                sayfa.Cells[1, 1, 1, 13].AutoFilter = true;
+                sayfa.Cells[1, 1, 1, 24].AutoFilter = true;
 
                 // Dosya adı oluştur
                 string dosyaAdi = $"H2H_{team1Id}-{team2Id}_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
