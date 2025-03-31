@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -8,6 +8,7 @@ using CaseStudy.Application.Services.Impl;
 using CaseStudy.Shared.Services;
 using CaseStudy.Shared.Services.Impl;
 using CaseStudy.Application.Interfaces;
+using CaseStudy.Application.Services;
 
 namespace CaseStudy.Application;
 
@@ -28,6 +29,8 @@ public static class ApplicationDependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IBayTahminService, BayTahminService>();
         services.AddScoped<IFootballDataService, FootballDataService>();
+        services.AddScoped<IRouletteService, RouletteService>();
+        services.AddScoped<MLPredictionService>();
     }
     private static void RegisterAutoMapper(this IServiceCollection services)
     {
