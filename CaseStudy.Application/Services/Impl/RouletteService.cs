@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using CaseStudy.Application.Interfaces;
 using CaseStudy.Application.Models.Roulette;
+using System.IO;
+using System.Text.Json;
 
 namespace CaseStudy.Application.Services.Impl
 {
@@ -13,79 +15,130 @@ namespace CaseStudy.Application.Services.Impl
         private readonly ILogger<RouletteService> _logger;
         private List<int> _rouletteNumbers = new List<int>();
         private int _lastPrediction = -1;
+        private bool _isInitialized = false;
+        private readonly string _dataFilePath = "roulette_numbers.json";
 
         public RouletteService(ILogger<RouletteService> logger)
         {
             _logger = logger;
+            LoadNumbersFromFile();
         }
 
-        public Task<RoulettePredictionResponse> PredictRoulette(List<int>? initialNumbers, int? newNumber)
+        private void LoadNumbersFromFile()
         {
             try
             {
-                // İlk yükleme durumu
-                if (initialNumbers != null && initialNumbers.Count > 0)
+                if (File.Exists(_dataFilePath))
                 {
-                    _logger.LogInformation($"Rulet verileri yükleniyor. Sayı adedi: {initialNumbers.Count}");
-                    _rouletteNumbers = new List<int>(initialNumbers);
-                    
-                    // İlk tahmin
-                    int prediction = PredictNextNumber(_rouletteNumbers);
-                    _lastPrediction = prediction;
-                    
-                    return Task.FromResult(new RoulettePredictionResponse
+                    string jsonData = File.ReadAllText(_dataFilePath);
+                    var numbers = JsonSerializer.Deserialize<List<int>>(jsonData);
+                    if (numbers != null && numbers.Count > 0)
                     {
-                        PredictedNumber = prediction,
-                        Numbers = new List<int>(_rouletteNumbers)
-                    });
-                }
-                // Yeni sayı ekleme durumu
-                else if (newNumber.HasValue)
-                {
-                    if (_rouletteNumbers.Count == 0)
-                    {
-                        _logger.LogWarning("Henüz rulet verileri yüklenmemiş.");
-                        return Task.FromResult(new RoulettePredictionResponse
-                        {
-                            PredictedNumber = -1,
-                            Numbers = new List<int>()
-                        });
+                        _rouletteNumbers = numbers;
+                        _isInitialized = true;
+                        _logger.LogInformation($"Rulet verileri dosyadan yüklendi. Sayı adedi: {_rouletteNumbers.Count}");
                     }
-                    
-                    // Yeni sayıyı ekle
-                    _rouletteNumbers.Add(newNumber.Value);
-                    _logger.LogInformation($"Yeni sayı eklendi: {newNumber}. Toplam sayı adedi: {_rouletteNumbers.Count}");
-                    
-                    // Listeyi 500 sayıda tut (en eski sayıları çıkar)
-                    if (_rouletteNumbers.Count > 500)
-                    {
-                        _rouletteNumbers.RemoveAt(0);
-                    }
-                    
-                    // Tahmin yap
-                    int prediction = PredictNextNumber(_rouletteNumbers);
-                    _lastPrediction = prediction;
-                    
-                    return Task.FromResult(new RoulettePredictionResponse
-                    {
-                        PredictedNumber = prediction,
-                        Numbers = new List<int>(_rouletteNumbers)
-                    });
-                }
-                else
-                {
-                    _logger.LogWarning("Geçersiz istek: initialNumbers veya newNumber sağlanmalıdır.");
-                    return Task.FromResult(new RoulettePredictionResponse
-                    {
-                        PredictedNumber = -1,
-                        Numbers = new List<int>(_rouletteNumbers)
-                    });
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Rulet tahmini sırasında hata oluştu");
-                throw;
+                _logger.LogError(ex, "Rulet verileri dosyadan yüklenirken hata oluştu");
+            }
+        }
+
+        private void SaveNumbersToFile()
+        {
+            try
+            {
+                string jsonData = JsonSerializer.Serialize(_rouletteNumbers);
+                File.WriteAllText(_dataFilePath, jsonData);
+                _logger.LogInformation($"Rulet verileri dosyaya kaydedildi. Sayı adedi: {_rouletteNumbers.Count}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Rulet verileri dosyaya kaydedilirken hata oluştu");
+            }
+        }
+
+        public Task<RouletteInitializeResponse> InitializeWithNumbers(List<int> initialNumbers)
+        {
+            try
+            {
+                if (initialNumbers == null || initialNumbers.Count == 0)
+                {
+                    _logger.LogWarning("Geçersiz başlangıç verileri.");
+                    return Task.FromResult(new RouletteInitializeResponse
+                    {
+                        Success = false,
+                        NumbersCount = 0
+                    });
+                }
+
+                _logger.LogInformation($"Rulet verileri yükleniyor. Sayı adedi: {initialNumbers.Count}");
+                _rouletteNumbers = new List<int>(initialNumbers);
+                _isInitialized = true;
+                
+                // Verileri dosyaya kaydet
+                SaveNumbersToFile();
+                
+                return Task.FromResult(new RouletteInitializeResponse
+                {
+                    Success = true,
+                    NumbersCount = _rouletteNumbers.Count
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Rulet verileri yüklenirken hata oluştu");
+                return Task.FromResult(new RouletteInitializeResponse
+                {
+                    Success = false,
+                    NumbersCount = 0
+                });
+            }
+        }
+
+        public Task<RoulettePredictionResponse> AddNumberAndPredict(int newNumber)
+        {
+            try
+            {
+                _logger.LogInformation($"AddNumberAndPredict çağrıldı. Mevcut sayı adedi: {_rouletteNumbers.Count}, Başlatılmış mı: {_isInitialized}");
+                
+                if (_rouletteNumbers.Count == 0 || !_isInitialized)
+                {
+                    _logger.LogWarning("Henüz rulet verileri yüklenmemiş veya başlatılmamış.");
+                    return Task.FromResult(new RoulettePredictionResponse
+                    {
+                        PredictedNumber = -1,
+                        Numbers = new List<int>()
+                    });
+                }
+                
+                // Yeni sayıyı ekle
+                _rouletteNumbers.Add(newNumber);
+                _logger.LogInformation($"Yeni sayı eklendi: {newNumber}. Toplam sayı adedi: {_rouletteNumbers.Count}");
+                
+                // Verileri dosyaya kaydet
+                SaveNumbersToFile();
+                
+                // Tahmin yap
+                int prediction = PredictNextNumber(_rouletteNumbers);
+                _lastPrediction = prediction;
+                
+                return Task.FromResult(new RoulettePredictionResponse
+                {
+                    PredictedNumber = prediction,
+                    Numbers = new List<int>(_rouletteNumbers)
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sayı ekleme ve tahmin sırasında hata oluştu");
+                return Task.FromResult(new RoulettePredictionResponse
+                {
+                    PredictedNumber = -1,
+                    Numbers = new List<int>(_rouletteNumbers)
+                });
             }
         }
 

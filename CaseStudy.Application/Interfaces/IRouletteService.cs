@@ -7,12 +7,17 @@ namespace CaseStudy.Application.Interfaces
     public interface IRouletteService
     {
         /// <summary>
-        /// Rulet tahmin işlemini gerçekleştirir.
-        /// İlk çağrıda initialNumbers ile başlatılır, sonraki çağrılarda newNumber ile tahmin yapar.
+        /// İlk rulet sayılarını yükler
         /// </summary>
-        /// <param name="initialNumbers">İlk yüklemede kullanılacak rulet sayıları (ilk kez gönderildiğinde)</param>
-        /// <param name="newNumber">Yeni gelen rulet sayısı (sonraki isteklerde)</param>
+        /// <param name="initialNumbers">İlk yüklenecek rulet sayıları</param>
+        /// <returns>Yükleme sonucu</returns>
+        Task<RouletteInitializeResponse> InitializeWithNumbers(List<int> initialNumbers);
+        
+        /// <summary>
+        /// Yeni rulet sayısı ekler ve bir sonraki sayıyı tahmin eder
+        /// </summary>
+        /// <param name="newNumber">Yeni gelen rulet sayısı</param>
         /// <returns>Tahmin sonucu</returns>
-        Task<RoulettePredictionResponse> PredictRoulette(List<int>? initialNumbers, int? newNumber);
+        Task<RoulettePredictionResponse> AddNumberAndPredict(int newNumber);
     }
 }

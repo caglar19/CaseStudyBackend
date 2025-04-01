@@ -3,19 +3,41 @@ using System.Collections.Generic;
 namespace CaseStudy.Application.Models.Roulette
 {
     /// <summary>
-    /// Rulet tahmin isteği modeli
+    /// İlk rulet sayılarını yüklemek için kullanılan model
     /// </summary>
-    public class RoulettePredictionRequest
+    public class RouletteInitializeRequest
     {
         /// <summary>
-        /// İlk yüklemede kullanılacak rulet sayıları (ilk kez gönderildiğinde)
+        /// İlk yüklenecek rulet sayıları
         /// </summary>
-        public List<int>? InitialNumbers { get; set; }
+        public List<int> InitialNumbers { get; set; } = new List<int>();
+    }
 
+    /// <summary>
+    /// İlk yükleme sonucu
+    /// </summary>
+    public class RouletteInitializeResponse
+    {
         /// <summary>
-        /// Yeni gelen rulet sayısı (sonraki isteklerde)
+        /// İşlem başarılı mı
         /// </summary>
-        public int? NewNumber { get; set; }
+        public bool Success { get; set; }
+        
+        /// <summary>
+        /// Yüklenen sayı adedi
+        /// </summary>
+        public int NumbersCount { get; set; }
+    }
+
+    /// <summary>
+    /// Yeni rulet sayısı eklemek için kullanılan model
+    /// </summary>
+    public class RouletteAddNumberRequest
+    {
+        /// <summary>
+        /// Yeni gelen rulet sayısı
+        /// </summary>
+        public int NewNumber { get; set; }
     }
 
     /// <summary>

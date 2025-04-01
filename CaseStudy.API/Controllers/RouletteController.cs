@@ -21,26 +21,55 @@ namespace CaseStudy.API.Controllers
         }
 
         /// <summary>
-        /// Rulet tahmin API'si
-        /// İlk çağrıda initialNumbers ile 500 sayıyı yükler, sonraki çağrılarda newNumber ile tahmin yapar
+        /// İlk rulet sayılarını yükler
         /// </summary>
-        /// <param name="request">Tahmin isteği</param>
-        /// <returns>Tahmin sonucu</returns>
-        [HttpPost]
-        public async Task<ActionResult<RoulettePredictionResponse>> PredictRoulette([FromBody] RoulettePredictionRequest request)
+        /// <param name="request">İlk yüklenecek rulet sayıları</param>
+        /// <returns>Yükleme sonucu</returns>
+        [HttpPost("initialize")]
+        public async Task<ActionResult<RouletteInitializeResponse>> InitializeWithNumbers([FromBody] RouletteInitializeRequest request)
         {
             try
             {
-                if (request == null || (request.InitialNumbers == null || request.InitialNumbers.Count == 0) && !request.NewNumber.HasValue)
+                if (request == null || request.InitialNumbers == null || request.InitialNumbers.Count == 0)
                 {
-                    return BadRequest("Geçerli bir istek sağlanmalıdır: initialNumbers veya newNumber gereklidir.");
+                    return BadRequest("Geçerli rulet sayıları sağlanmalıdır.");
                 }
 
-                var response = await _rouletteService.PredictRoulette(request.InitialNumbers, request.NewNumber);
+                var response = await _rouletteService.InitializeWithNumbers(request.InitialNumbers);
+                if (!response.Success)
+                {
+                    return BadRequest("Rulet verileri yüklenemedi.");
+                }
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Rulet verileri yüklenirken hata oluştu");
+                return StatusCode(500, "Rulet verileri yüklenirken bir hata oluştu.");
+            }
+        }
+
+        /// <summary>
+        /// Yeni bir rulet sayısı ekler ve bir sonraki sayıyı tahmin eder
+        /// </summary>
+        /// <param name="request">Yeni rulet sayısı</param>
+        /// <returns>Tahmin sonucu</returns>
+        [HttpPost("predict")]
+        public async Task<ActionResult<RoulettePredictionResponse>> AddNumberAndPredict([FromBody] RouletteAddNumberRequest request)
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return BadRequest("Geçerli bir istek sağlanmalıdır.");
+                }
+
+                var response = await _rouletteService.AddNumberAndPredict(request.NewNumber);
                 
                 if (response.PredictedNumber < 0)
                 {
-                    return BadRequest("Tahmin yapılamadı. Lütfen önce initialNumbers ile rulet verilerini yükleyin.");
+                    return BadRequest("Tahmin yapılamadı. Lütfen önce rulet verilerini yükleyin.");
                 }
 
                 return Ok(response);
