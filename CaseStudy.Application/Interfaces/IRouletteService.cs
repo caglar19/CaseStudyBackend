@@ -19,5 +19,12 @@ namespace CaseStudy.Application.Interfaces
         /// <param name="newNumber">Yeni gelen rulet sayısı</param>
         /// <returns>Tahmin sonucu</returns>
         Task<RoulettePredictionResponse> AddNumberAndPredict(int newNumber);
+        
+        /// <summary>
+        /// HTML içeriğinden rulet sayılarını çıkarır
+        /// </summary>
+        /// <param name="htmlContent">Rulet sayılarını içeren HTML içeriği</param>
+        /// <returns>Çıkarılan rulet sayıları</returns>
+        Task<RouletteExtractNumbersResponse> ExtractNumbersFromHtml(string htmlContent);
     }
 }

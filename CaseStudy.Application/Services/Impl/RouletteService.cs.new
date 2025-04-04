@@ -116,9 +116,9 @@ namespace CaseStudy.Application.Services.Impl
                     });
                 }
                 
-                // Yeni sayıyı listenin başına ekle
-                _rouletteNumbers.Insert(0, newNumber);
-                _logger.LogInformation($"Yeni sayı listenin başına eklendi: {newNumber}. Toplam sayı adedi: {_rouletteNumbers.Count}");
+                // Yeni sayıyı ekle
+                _rouletteNumbers.Add(newNumber);
+                _logger.LogInformation($"Yeni sayı eklendi: {newNumber}. Toplam sayı adedi: {_rouletteNumbers.Count}");
                 
                 // Verileri dosyaya kaydet
                 SaveNumbersToFile();

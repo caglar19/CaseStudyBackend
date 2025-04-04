@@ -66,4 +66,41 @@ namespace CaseStudy.Application.Models.Roulette
             "Dağılım Analizi: Çift/tek, kırmızı/siyah, yüksek/düşük"
         };
     }
+    
+    /// <summary>
+    /// HTML içeriğinden rulet sayılarını çıkarmak için kullanılan model
+    /// </summary>
+    public class RouletteExtractNumbersRequest
+    {
+        /// <summary>
+        /// Rulet sayılarını içeren HTML içeriği
+        /// </summary>
+        public string? HtmlContent { get; set; }
+    }
+    
+    /// <summary>
+    /// HTML içeriğinden çıkarılan rulet sayıları sonucu
+    /// </summary>
+    public class RouletteExtractNumbersResponse
+    {
+        /// <summary>
+        /// İşlem başarılı mı
+        /// </summary>
+        public bool Success { get; set; }
+        
+        /// <summary>
+        /// Çıkarılan rulet sayıları
+        /// </summary>
+        public List<int> Numbers { get; set; } = new List<int>();
+        
+        /// <summary>
+        /// Çıkarılan sayı adedi
+        /// </summary>
+        public int NumbersCount { get; set; }
+        
+        /// <summary>
+        /// Hata mesajı (başarısız olursa)
+        /// </summary>
+        public string? ErrorMessage { get; set; }
+    }
 }

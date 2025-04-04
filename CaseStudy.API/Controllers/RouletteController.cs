@@ -1,9 +1,12 @@
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using CaseStudy.Application.Interfaces;
 using CaseStudy.Application.Models.Roulette;
+using System.Text.Json;
 
 namespace CaseStudy.API.Controllers
 {
@@ -53,31 +56,96 @@ namespace CaseStudy.API.Controllers
         /// <summary>
         /// Yeni bir rulet sayısı ekler ve bir sonraki sayıyı tahmin eder
         /// </summary>
-        /// <param name="request">Yeni rulet sayısı</param>
+        /// <param name="newNumber">Yeni rulet sayısı</param>
         /// <returns>Tahmin sonucu</returns>
         [HttpPost("predict")]
-        public async Task<ActionResult<RoulettePredictionResponse>> AddNumberAndPredict([FromBody] RouletteAddNumberRequest request)
+        public async Task<IActionResult> AddNumberAndPredict([FromBody] int newNumber)
+        {
+            _logger.LogInformation($"AddNumberAndPredict endpoint'i çağrıldı. Yeni sayı: {newNumber}");
+            var result = await _rouletteService.AddNumberAndPredict(newNumber);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// HTML içeriğinden rulet sayılarını çıkarır
+        /// </summary>
+        /// <param name="request">HTML içeriği</param>
+        /// <returns>Çıkarılan rulet sayıları</returns>
+        [HttpPost("extract-numbers")]
+        [Consumes("application/json")]
+        public async Task<IActionResult> ExtractNumbersFromHtml([FromBody] RouletteExtractNumbersRequest request)
         {
             try
             {
-                if (request == null)
-                {
-                    return BadRequest("Geçerli bir istek sağlanmalıdır.");
-                }
-
-                var response = await _rouletteService.AddNumberAndPredict(request.NewNumber);
+                _logger.LogInformation("ExtractNumbersFromHtml endpoint'i çağrıldı.");
                 
-                if (response.PredictedNumber < 0)
+                if (request == null || string.IsNullOrEmpty(request.HtmlContent))
                 {
-                    return BadRequest("Tahmin yapılamadı. Lütfen önce rulet verilerini yükleyin.");
+                    _logger.LogWarning("Geçersiz istek: HTML içeriği boş veya null");
+                    return BadRequest(new RouletteExtractNumbersResponse
+                    {
+                        Success = false,
+                        ErrorMessage = "HTML içeriği boş veya geçersiz"
+                    });
                 }
-
-                return Ok(response);
+                
+                // HTML içeriğindeki özel karakterleri işle
+                string htmlContent = request.HtmlContent;
+                
+                var result = await _rouletteService.ExtractNumbersFromHtml(htmlContent);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Rulet tahmini sırasında hata oluştu");
-                return StatusCode(500, "Rulet tahmini yapılırken bir hata oluştu.");
+                _logger.LogError(ex, "HTML içeriğinden rulet sayıları çıkarılırken hata oluştu");
+                return StatusCode(500, "HTML içeriğinden rulet sayıları çıkarılırken bir hata oluştu.");
+            }
+        }
+        
+        /// <summary>
+        /// HTML içeriğinden rulet sayılarını çıkarır (Form veri olarak)
+        /// </summary>
+        /// <returns>Çıkarılan rulet sayıları</returns>
+        [HttpPost("extract-numbers-form")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ExtractNumbersFromHtmlForm(IFormFile htmlFile)
+        {
+            try
+            {
+                _logger.LogInformation("ExtractNumbersFromHtmlForm endpoint'i çağrıldı.");
+                
+                if (htmlFile == null || htmlFile.Length == 0)
+                {
+                    _logger.LogWarning("Geçersiz istek: HTML dosyası boş veya null");
+                    return BadRequest(new RouletteExtractNumbersResponse
+                    {
+                        Success = false,
+                        ErrorMessage = "HTML dosyası boş veya geçersiz"
+                    });
+                }
+                
+                string htmlContent;
+                using (var reader = new StreamReader(htmlFile.OpenReadStream()))
+                {
+                    htmlContent = await reader.ReadToEndAsync();
+                }
+                
+                if (string.IsNullOrEmpty(htmlContent))
+                {
+                    return BadRequest(new RouletteExtractNumbersResponse
+                    {
+                        Success = false,
+                        ErrorMessage = "HTML içeriği boş"
+                    });
+                }
+                
+                var result = await _rouletteService.ExtractNumbersFromHtml(htmlContent);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "HTML dosyasından rulet sayıları çıkarılırken hata oluştu");
+                return StatusCode(500, "HTML dosyasından rulet sayıları çıkarılırken bir hata oluştu.");
             }
         }
     }
