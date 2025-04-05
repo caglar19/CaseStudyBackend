@@ -254,20 +254,26 @@ namespace CaseStudy.Application.Services.Impl
             }
 
             // 3. Son sayıların tekrar etme olasılığını kontrol et
-            var lastNumbers = numbers.Skip(Math.Max(0, numbers.Count - 10)).ToList();
+            // Not: Sayılar listenin başında olduğu için ilk 15 sayıyı alıyoruz (daha fazla veri için)
+            var lastNumbers = numbers.Take(15).ToList();
             
             // 4. Çift/tek, kırmızı/siyah, yüksek/düşük dağılımlarını analiz et
-            var oddCount = numbers.Count(n => n % 2 == 1 && n > 0);
-            var evenCount = numbers.Count(n => n % 2 == 0 && n > 0);
-            var zeroCount = numbers.Count(n => n == 0);
+            // Son 30 sayıya daha fazla ağırlık ver
+            var recentNumbers = numbers.Take(Math.Min(30, numbers.Count)).ToList();
+            var olderNumbers = numbers.Skip(30).ToList();
             
-            var lowCount = numbers.Count(n => n > 0 && n <= 18);
-            var highCount = numbers.Count(n => n > 18);
+            // Son sayıların ağırlığı daha fazla olsun
+            var oddCount = recentNumbers.Count(n => n % 2 == 1 && n > 0) * 2 + olderNumbers.Count(n => n % 2 == 1 && n > 0);
+            var evenCount = recentNumbers.Count(n => n % 2 == 0 && n > 0) * 2 + olderNumbers.Count(n => n % 2 == 0 && n > 0);
+            var zeroCount = recentNumbers.Count(n => n == 0) * 2 + olderNumbers.Count(n => n == 0);
+            
+            var lowCount = recentNumbers.Count(n => n > 0 && n <= 18) * 2 + olderNumbers.Count(n => n > 0 && n <= 18);
+            var highCount = recentNumbers.Count(n => n > 18) * 2 + olderNumbers.Count(n => n > 18);
 
             // Kırmızı sayılar: 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
             var redNumbers = new List<int> { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
-            var redCount = numbers.Count(n => redNumbers.Contains(n));
-            var blackCount = numbers.Count(n => n > 0 && !redNumbers.Contains(n));
+            var redCount = recentNumbers.Count(n => redNumbers.Contains(n)) * 2 + olderNumbers.Count(n => redNumbers.Contains(n));
+            var blackCount = recentNumbers.Count(n => n > 0 && !redNumbers.Contains(n)) * 2 + olderNumbers.Count(n => n > 0 && !redNumbers.Contains(n));
 
             // 5. Sayı dizilerini analiz et (ardışık sayılar, belirli aralıklar)
             var sequences = AnalyzeSequences(numbers);
@@ -287,8 +293,8 @@ namespace CaseStudy.Application.Services.Impl
                 return result;
             }
 
-            // Son 20 sayıyı al
-            var lastNumbers = numbers.Skip(Math.Max(0, numbers.Count - 20)).ToList();
+            // Sayılar listenin başında olduğu için ilk 25 sayıyı al (daha kapsamlı analiz için)
+            var lastNumbers = numbers.Take(Math.Min(25, numbers.Count)).ToList();
             
             // 3'lü dizileri bul
             for (int i = 0; i < lastNumbers.Count - 2; i++)
@@ -312,6 +318,30 @@ namespace CaseStudy.Application.Services.Impl
                 }
             }
             
+            // 2'li dizileri de analiz et (daha kısa örüntüler için)
+            for (int i = 0; i < lastNumbers.Count - 1; i++)
+            {
+                var seq = new List<int> { lastNumbers[i], lastNumbers[i + 1], -1 }; // -1 placeholder for prediction
+                
+                // Bu dizi başka yerde tekrar ediyor mu?
+                for (int j = i + 2; j < lastNumbers.Count - 1; j++)
+                {
+                    if (lastNumbers[j] == seq[0] && j + 1 < lastNumbers.Count && lastNumbers[j + 1] == seq[1])
+                    {
+                        // Eğer bu ikili dizi sonrasında bir sayı varsa, onu tahmin olarak ekle
+                        if (j + 2 < lastNumbers.Count)
+                        {
+                            seq[2] = lastNumbers[j + 2];
+                            if (!result.Any(s => s[0] == seq[0] && s[1] == seq[1] && s[2] == seq[2]))
+                            {
+                                result.Add(new List<int>(seq));
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            
             return result;
         }
 
@@ -328,25 +358,66 @@ namespace CaseStudy.Application.Services.Impl
             int blackCount,
             List<List<int>> sequences)
         {
-            var random = new Random();
+            var random = new Random(DateTime.Now.Millisecond); // Daha iyi rastgelelik için seed değerini değiştir
             var candidates = new List<int>();
+            var weightedCandidates = new Dictionary<int, int>(); // Sayı ve ağırlık çifti
             
-            // Sıcak sayıları değerlendir
-            if (hotNumbers.Any())
+            // Tüm olası sayıları başlangıçta düşük ağırlıkla ekle (çeşitlilik için)
+            for (int i = 0; i <= 36; i++)
             {
-                candidates.AddRange(hotNumbers);
+                weightedCandidates[i] = 1;
             }
             
-            // Dizi analizini değerlendir
+            // Rastgele bir faktör belirle (her çağrıda farklı stratejilere ağırlık vermek için)
+            double randomFactor = random.NextDouble();
+            
+            // Sıcak sayıları değerlendir (rastgele faktöre göre ağırlık ver)
+            if (hotNumbers.Any())
+            {
+                int hotWeight = randomFactor < 0.5 ? 2 : 4; // Bazen daha fazla, bazen daha az ağırlık ver
+                foreach (var num in hotNumbers)
+                {
+                    AddOrUpdateCandidate(weightedCandidates, num, hotWeight);
+                }
+            }
+            
+            // Dizi analizini değerlendir - sayılar listenin başında olduğu için ilk sayıları kontrol et
             if (sequences.Any() && lastNumbers.Count >= 2)
             {
+                int seqMatchCount = 0;
                 foreach (var seq in sequences)
                 {
+                    // Tam eşleşme kontrolü - son iki sayı bir dizinin başlangıcı mı?
                     if (seq.Count >= 3 && 
-                        lastNumbers[lastNumbers.Count - 2] == seq[0] && 
-                        lastNumbers[lastNumbers.Count - 1] == seq[1])
+                        lastNumbers.Count >= 2 &&
+                        lastNumbers[0] == seq[1] && 
+                        lastNumbers[1] == seq[0])
                     {
-                        candidates.Add(seq[2]);
+                        // Dizi eşleşmesi bulundu, bu durumda seq[2] tahmin edilir
+                        // Daha yüksek ağırlık ver çünkü bu güçlü bir örüntü
+                        AddOrUpdateCandidate(weightedCandidates, seq[2], 6 + random.Next(1, 4)); // Rastgele ek ağırlık
+                        seqMatchCount++;
+                    }
+                    
+                    // Kısmi eşleşme kontrolü - son sayı bir dizinin parçası mı?
+                    if (seq.Count >= 3 && lastNumbers.Count >= 1)
+                    {
+                        for (int i = 0; i < seq.Count - 1; i++)
+                        {
+                            if (lastNumbers[0] == seq[i])
+                            {
+                                // Kısmi eşleşme bulundu, bu durumda seq[i+1] tahmin edilir
+                                AddOrUpdateCandidate(weightedCandidates, seq[i+1], 3 + random.Next(0, 3)); // Rastgele ek ağırlık
+                                seqMatchCount++;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Çok fazla dizi eşleşmesi varsa, bazılarını rastgele seç (çeşitlilik için)
+                    if (seqMatchCount > 3 && random.NextDouble() > 0.7)
+                    {
+                        break;
                     }
                 }
             }
@@ -357,36 +428,230 @@ namespace CaseStudy.Application.Services.Impl
             double zeroRatio = (double)zeroCount / (oddCount + evenCount + zeroCount);
             
             // Beklenen oranlar: tek ~0.486, çift ~0.486, sıfır ~0.027
-            if (oddRatio < 0.45 && random.NextDouble() < 0.6)
+            // Rastgele bir strateji seç
+            double strategyRandom = random.NextDouble();
+            
+            if (strategyRandom < 0.33) // Tek/çift stratejisi
             {
-                // Tek sayılar beklenen orandan daha az çıkmış
-                candidates.AddRange(Enumerable.Range(1, 36).Where(n => n % 2 == 1));
+                if (oddRatio < 0.45)
+                {
+                    // Tek sayılar beklenen orandan daha az çıkmış
+                    foreach (var num in Enumerable.Range(1, 36).Where(n => n % 2 == 1))
+                    {
+                        AddOrUpdateCandidate(weightedCandidates, num, 1 + random.Next(0, 2));
+                    }
+                }
+                else if (evenRatio < 0.45)
+                {
+                    // Çift sayılar beklenen orandan daha az çıkmış
+                    foreach (var num in Enumerable.Range(1, 36).Where(n => n % 2 == 0))
+                    {
+                        AddOrUpdateCandidate(weightedCandidates, num, 1 + random.Next(0, 2));
+                    }
+                }
             }
-            else if (evenRatio < 0.45 && random.NextDouble() < 0.6)
+            else if (strategyRandom < 0.66) // Yüksek/düşük stratejisi
             {
-                // Çift sayılar beklenen orandan daha az çıkmış
-                candidates.AddRange(Enumerable.Range(1, 36).Where(n => n % 2 == 0));
+                double lowRatio = (double)lowCount / (lowCount + highCount);
+                if (lowRatio < 0.45)
+                {
+                    // Düşük sayılar az çıkmış
+                    foreach (var num in Enumerable.Range(1, 18))
+                    {
+                        AddOrUpdateCandidate(weightedCandidates, num, 1 + random.Next(0, 2));
+                    }
+                }
+                else
+                {
+                    // Yüksek sayılar az çıkmış
+                    foreach (var num in Enumerable.Range(19, 18))
+                    {
+                        AddOrUpdateCandidate(weightedCandidates, num, 1 + random.Next(0, 2));
+                    }
+                }
             }
-            else if (zeroRatio < 0.02 && random.NextDouble() < 0.3)
+            else // Kırmızı/siyah stratejisi
             {
-                // 0 beklenen orandan daha az çıkmış
-                candidates.Add(0);
+                // Kırmızı sayılar: 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
+                var redNumbers = new List<int> { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
+                double redRatio = (double)redCount / (redCount + blackCount);
+                
+                if (redRatio < 0.45)
+                {
+                    // Kırmızı sayılar az çıkmış
+                    foreach (var num in redNumbers)
+                    {
+                        AddOrUpdateCandidate(weightedCandidates, num, 1 + random.Next(0, 2));
+                    }
+                }
+                else
+                {
+                    // Siyah sayılar az çıkmış
+                    foreach (var num in Enumerable.Range(1, 36).Where(n => !redNumbers.Contains(n)))
+                    {
+                        AddOrUpdateCandidate(weightedCandidates, num, 1 + random.Next(0, 2));
+                    }
+                }
             }
             
-            // Soğuk sayıları değerlendir
-            if (coldNumbers.Any() && random.NextDouble() < 0.3)
+            // 0 için özel durum
+            if (zeroRatio < 0.02 && random.NextDouble() < 0.4)
             {
-                candidates.AddRange(coldNumbers);
+                AddOrUpdateCandidate(weightedCandidates, 0, 2 + random.Next(0, 3));
             }
             
-            // Tüm adaylar arasından rastgele bir tahmin seç
-            if (candidates.Any())
+            // Soğuk sayıları değerlendir (rastgele faktöre göre)
+            if (coldNumbers.Any() && random.NextDouble() < 0.4)
             {
-                return candidates[random.Next(candidates.Count)];
+                // Rastgele birkaç soğuk sayı seç (hepsini değil)
+                var selectedCold = coldNumbers.OrderBy(x => random.Next()).Take(Math.Min(5, coldNumbers.Count)).ToList();
+                foreach (var num in selectedCold)
+                {
+                    AddOrUpdateCandidate(weightedCandidates, num, 1 + random.Next(1, 3));
+                }
+            }
+            
+            // Son 5 sayıyı kontrol et - bunların tekrar gelme olasılığı düşük
+            if (lastNumbers.Count >= 5)
+            {
+                for (int i = 0; i < 5 && i < lastNumbers.Count; i++)
+                {
+                    if (weightedCandidates.ContainsKey(lastNumbers[i]))
+                    {
+                        // Son sayıların ağırlığını azalt, en son çıkan sayının tekrar gelme olasılığı en düşük
+                        // Ancak bazen son sayıların tekrarlanma olasılığı da vardır
+                        if (random.NextDouble() > 0.2) // %80 ihtimalle ceza uygula
+                        {
+                            int penalty = i == 0 ? 3 : (i <= 2 ? 2 : 1);
+                            weightedCandidates[lastNumbers[i]] = Math.Max(1, weightedCandidates[lastNumbers[i]] - penalty);
+                        }
+                        else if (i > 2) // %20 ihtimalle ve son çıkanlardan değilse, tekrar gelebilir
+                        {
+                            weightedCandidates[lastNumbers[i]] += random.Next(1, 3);
+                        }
+                    }
+                }
+            }
+            
+            // Trend analizi: Son sayılarda artan veya azalan bir trend var mı?
+            if (lastNumbers.Count >= 5 && random.NextDouble() < 0.6) // %60 ihtimalle trend analizi yap
+            {
+                bool increasingTrend = true;
+                bool decreasingTrend = true;
+                
+                for (int i = 0; i < 4; i++)
+                {
+                    if (lastNumbers[i] <= lastNumbers[i + 1])
+                        decreasingTrend = false;
+                    if (lastNumbers[i] >= lastNumbers[i + 1])
+                        increasingTrend = false;
+                }
+                
+                if (increasingTrend && lastNumbers[0] < 30)
+                {
+                    // Artan trend varsa, daha büyük bir sayı tahmin et
+                    // Ama rastgele bir aralık seç
+                    int start = lastNumbers[0] + 1;
+                    int range = Math.Min(6, 36 - start);
+                    int selectedCount = Math.Min(range, 2 + random.Next(1, 4)); // 2-5 arası sayı seç
+                    
+                    var selectedNumbers = Enumerable.Range(start, range)
+                        .OrderBy(x => random.Next())
+                        .Take(selectedCount);
+                        
+                    foreach (var num in selectedNumbers)
+                    {
+                        AddOrUpdateCandidate(weightedCandidates, num, 2 + random.Next(1, 3));
+                    }
+                }
+                else if (decreasingTrend && lastNumbers[0] > 6)
+                {
+                    // Azalan trend varsa, daha küçük bir sayı tahmin et
+                    // Ama rastgele bir aralık seç
+                    int end = lastNumbers[0] - 1;
+                    int start = Math.Max(0, end - 6);
+                    int range = end - start + 1;
+                    int selectedCount = Math.Min(range, 2 + random.Next(1, 4)); // 2-5 arası sayı seç
+                    
+                    var selectedNumbers = Enumerable.Range(start, range)
+                        .OrderBy(x => random.Next())
+                        .Take(selectedCount);
+                        
+                    foreach (var num in selectedNumbers)
+                    {
+                        AddOrUpdateCandidate(weightedCandidates, num, 2 + random.Next(1, 3));
+                    }
+                }
+            }
+            
+            // Komşu sayılar stratejisi (rastgele)
+            if (random.NextDouble() < 0.3 && lastNumbers.Count > 0)
+            {
+                int lastNum = lastNumbers[0];
+                int neighbor1 = (lastNum + 1) % 37;
+                int neighbor2 = (lastNum + 36) % 37; // -1 mod 37
+                
+                AddOrUpdateCandidate(weightedCandidates, neighbor1, 1 + random.Next(0, 3));
+                AddOrUpdateCandidate(weightedCandidates, neighbor2, 1 + random.Next(0, 3));
+            }
+            
+            // Tamamen rastgele sayılar ekle (çeşitlilik için)
+            for (int i = 0; i < 3; i++)
+            {
+                int randomNum = random.Next(0, 37);
+                AddOrUpdateCandidate(weightedCandidates, randomNum, 1 + random.Next(0, 2));
+            }
+            
+            // Ağırlıklı seçim yap
+            if (weightedCandidates.Any())
+            {
+                // Rastgele seçim stratejisi belirle
+                double selectionStrategy = random.NextDouble();
+                
+                if (selectionStrategy < 0.6) // %60 ihtimalle en yüksek ağırlıklı adaylardan seç
+                {
+                    // En yüksek ağırlıklı adayları bul
+                    int maxWeight = weightedCandidates.Values.Max();
+                    double threshold = 0.5 + (random.NextDouble() * 0.3); // 0.5-0.8 arası eşik değeri
+                    var topCandidates = weightedCandidates.Where(kvp => kvp.Value >= maxWeight * threshold)
+                                                          .Select(kvp => kvp.Key)
+                                                          .ToList();
+                    
+                    if (topCandidates.Count > 0)
+                    {
+                        return topCandidates[random.Next(topCandidates.Count)];
+                    }
+                }
+                
+                // Ağırlıklı seçim için tüm adayları listeye ekle
+                foreach (var kvp in weightedCandidates)
+                {
+                    for (int i = 0; i < kvp.Value; i++)
+                    {
+                        candidates.Add(kvp.Key);
+                    }
+                }
+                
+                if (candidates.Count > 0)
+                {
+                    return candidates[random.Next(candidates.Count)];
+                }
             }
             
             // Hiçbir strateji uygulanamadıysa, rastgele bir sayı döndür
             return random.Next(37); // 0-36 arası
+        }
+        
+        private void AddOrUpdateCandidate(Dictionary<int, int> candidates, int number, int weight)
+        {
+            if (candidates.ContainsKey(number))
+            {
+                candidates[number] += weight;
+            }
+            else
+            {
+                candidates[number] = weight;
+            }
         }
 
         #endregion
