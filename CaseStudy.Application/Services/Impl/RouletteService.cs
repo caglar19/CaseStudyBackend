@@ -278,9 +278,13 @@ namespace CaseStudy.Application.Services.Impl
             // 5. Sayı dizilerini analiz et (ardışık sayılar, belirli aralıklar)
             var sequences = AnalyzeSequences(numbers);
 
+            // 6. Komşu sayıların frekansını analiz et (9 sağ ve 9 sol komşu)
+            var neighborFrequency = AnalyzeNeighborFrequency(numbers);
+
             // Tüm stratejileri bir araya getirerek ağırlıklı bir tahmin yap
             var prediction = GeneratePrediction(hotNumbers, coldNumbers, lastNumbers, 
-                oddCount, evenCount, zeroCount, lowCount, highCount, redCount, blackCount, sequences);
+                oddCount, evenCount, zeroCount, lowCount, highCount, redCount, blackCount, 
+                sequences, neighborFrequency);
 
             return prediction;
         }
@@ -344,6 +348,58 @@ namespace CaseStudy.Application.Services.Impl
             
             return result;
         }
+        
+        /// <summary>
+        /// 9 sağ ve 9 sol komşu sayıların frekansını analiz eder
+        /// </summary>
+        /// <param name="numbers">Analiz edilecek sayı listesi</param>
+        /// <returns>Her sayının komşularının frekansını içeren sözlük</returns>
+        private Dictionary<int, Dictionary<string, int>> AnalyzeNeighborFrequency(List<int> numbers)
+        {
+            // Her sayı için komşu sayıların frekansını tutacak sözlük
+            var neighborFrequency = new Dictionary<int, Dictionary<string, int>>();
+            
+            // Tüm olası rulet sayıları için sözlük oluştur
+            for (int i = 0; i <= 36; i++)
+            {
+                neighborFrequency[i] = new Dictionary<string, int>
+                {
+                    { "right", 0 }, // 9 sağ komşu frekansı
+                    { "left", 0 }   // 9 sol komşu frekansı
+                };
+            }
+            
+            if (numbers == null || numbers.Count < 2)
+            {
+                return neighborFrequency;
+            }
+            
+            // Son 100 sayıyı analiz et (daha fazla veri için)
+            var recentNumbers = numbers.Take(Math.Min(100, numbers.Count)).ToList();
+            
+            // Her sayı için, sonraki sayının 9 sağ veya 9 sol komşusu olup olmadığını kontrol et
+            for (int i = 0; i < recentNumbers.Count - 1; i++)
+            {
+                int currentNumber = recentNumbers[i];
+                int nextNumber = recentNumbers[i + 1];
+                
+                // 9 sağ komşu kontrolü
+                int rightNeighbor = (currentNumber + 9) % 37; // 37'ye göre mod al (0-36 arası sayılar)
+                if (nextNumber == rightNeighbor)
+                {
+                    neighborFrequency[currentNumber]["right"]++;
+                }
+                
+                // 9 sol komşu kontrolü
+                int leftNeighbor = (currentNumber + 28) % 37; // (currentNumber - 9 + 37) % 37 ile aynı
+                if (nextNumber == leftNeighbor)
+                {
+                    neighborFrequency[currentNumber]["left"]++;
+                }
+            }
+            
+            return neighborFrequency;
+        }
 
         private int GeneratePrediction(
             List<int> hotNumbers, 
@@ -356,7 +412,8 @@ namespace CaseStudy.Application.Services.Impl
             int highCount,
             int redCount,
             int blackCount,
-            List<List<int>> sequences)
+            List<List<int>> sequences,
+            Dictionary<int, Dictionary<string, int>> neighborFrequency)
         {
             var random = new Random(DateTime.Now.Millisecond); // Daha iyi rastgelelik için seed değerini değiştir
             var candidates = new List<int>();
@@ -584,15 +641,54 @@ namespace CaseStudy.Application.Services.Impl
                 }
             }
             
-            // Komşu sayılar stratejisi (rastgele)
-            if (random.NextDouble() < 0.3 && lastNumbers.Count > 0)
+            // Komşu sayılar stratejisi - 9 sağ ve 9 sol komşuları dikkate al
+            if (lastNumbers.Count > 0)
             {
-                int lastNum = lastNumbers[0];
-                int neighbor1 = (lastNum + 1) % 37;
-                int neighbor2 = (lastNum + 36) % 37; // -1 mod 37
+                // Son 5 sayının 9 sağ ve 9 sol komşularını değerlendir
+                for (int i = 0; i < Math.Min(5, lastNumbers.Count); i++)
+                {
+                    int currentNum = lastNumbers[i];
+                    
+                    // 9 sağ komşu
+                    int rightNeighbor = (currentNum + 9) % 37;
+                    // 9 sol komşu
+                    int leftNeighbor = (currentNum + 28) % 37; // (currentNum - 9 + 37) % 37 ile aynı
+                    
+                    // Komşu sayıların frekansına göre ağırlık ver
+                    int rightFreq = neighborFrequency[currentNum]["right"];
+                    int leftFreq = neighborFrequency[currentNum]["left"];
+                    
+                    // Frekans ne kadar yüksekse, o kadar yüksek ağırlık ver
+                    int rightWeight = 2 + Math.Min(5, rightFreq * 2) + (i == 0 ? 2 : 0); // Son sayıya daha fazla ağırlık
+                    int leftWeight = 2 + Math.Min(5, leftFreq * 2) + (i == 0 ? 2 : 0);
+                    
+                    // Rastgele bir varyasyon ekle
+                    rightWeight += random.Next(0, 3);
+                    leftWeight += random.Next(0, 3);
+                    
+                    // Komşu sayıları aday listesine ekle
+                    AddOrUpdateCandidate(weightedCandidates, rightNeighbor, rightWeight);
+                    AddOrUpdateCandidate(weightedCandidates, leftNeighbor, leftWeight);
+                    
+                    // Kullanıcının bahis stratejisine uygun olarak, bu komşuların komşularına da düşük ağırlık ver
+                    // Yani tahmin edilen sayının 18 sağ ve 18 sol komşusuna da bahis koyulabilir
+                    int farRightNeighbor = (rightNeighbor + 9) % 37;
+                    int farLeftNeighbor = (leftNeighbor + 28) % 37;
+                    
+                    AddOrUpdateCandidate(weightedCandidates, farRightNeighbor, rightWeight / 2);
+                    AddOrUpdateCandidate(weightedCandidates, farLeftNeighbor, leftWeight / 2);
+                }
                 
-                AddOrUpdateCandidate(weightedCandidates, neighbor1, 1 + random.Next(0, 3));
-                AddOrUpdateCandidate(weightedCandidates, neighbor2, 1 + random.Next(0, 3));
+                // Standart komşu sayılar stratejisi (1 sağ, 1 sol)
+                if (random.NextDouble() < 0.2) // Daha düşük ihtimalle uygula
+                {
+                    int lastNum = lastNumbers[0];
+                    int neighbor1 = (lastNum + 1) % 37;
+                    int neighbor2 = (lastNum + 36) % 37; // -1 mod 37
+                    
+                    AddOrUpdateCandidate(weightedCandidates, neighbor1, 1 + random.Next(0, 2));
+                    AddOrUpdateCandidate(weightedCandidates, neighbor2, 1 + random.Next(0, 2));
+                }
             }
             
             // Tamamen rastgele sayılar ekle (çeşitlilik için)
