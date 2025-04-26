@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
-using CaseStudy.Application.Interfaces;
-using CaseStudy.Application.Models.Roulette;
-using System.Text.RegularExpressions;
 using MongoDB.Driver;
+using CaseStudy.Application.Models.Roulette;
+using CaseStudy.Application.Interfaces;
+using System.Text.RegularExpressions;
 
 // Kullanılacak modelleri açıkça belirt
 using RoulettePredictionResponseModel = CaseStudy.Application.Models.Roulette.RoulettePredictionResponse;
@@ -327,12 +327,49 @@ namespace CaseStudy.Application.Services.Impl
                 return -1;
             }
 
-            // 1. Sıcak sayılar stratejisi: En çok tekrar eden sayıları bul
-            var hotNumbers = numbers
-                .GroupBy(n => n)
-                .OrderByDescending(g => g.Count())
-                .Take(5)
-                .Select(g => g.Key)
+            // Son sayıların tarih/saatleri gibi ek bilgileri olsaydı, bunları kullanarak 
+            // zaman bazlı örüntüleri de analiz edebilirdik.
+            // Şimdilik elimizdeki veri tabanını kullanacağız
+
+            // 1. GELİŞTİRME: Sıcak sayılar stratejisi - frekans analizi
+            // Sadece sık görülen sayılar değil, son zamanlarda yükselen sayıları da tespit edelim
+            var allNumbers = numbers.GroupBy(n => n).ToDictionary(g => g.Key, g => g.Count());
+            
+            // Son 30, 60, 90 dönemdeki frekansları karşılaştır
+            var last30 = numbers.Take(Math.Min(30, numbers.Count)).GroupBy(n => n).ToDictionary(g => g.Key, g => g.Count());
+            var last60 = numbers.Take(Math.Min(60, numbers.Count)).GroupBy(n => n).ToDictionary(g => g.Key, g => g.Count());
+            var last90 = numbers.Take(Math.Min(90, numbers.Count)).GroupBy(n => n).ToDictionary(g => g.Key, g => g.Count());
+            
+            // Trendi artan sayıları bul (son 30'da daha sık görülen sayılar)
+            var trendingNumbers = new Dictionary<int, double>();
+            foreach (var num in Enumerable.Range(0, 37))
+            {
+                double trend = 0;
+                // Son 30'daki frekans daha yüksekse pozitif trend
+                if (last30.ContainsKey(num))
+                {
+                    trend += 3.0 * last30[num] / Math.Min(30, numbers.Count);
+                }
+                if (last60.ContainsKey(num))
+                {
+                    trend += 2.0 * last60[num] / Math.Min(60, numbers.Count);
+                }
+                if (last90.ContainsKey(num))
+                {
+                    trend += 1.0 * last90[num] / Math.Min(90, numbers.Count);
+                }
+                
+                if (trend > 0)
+                {
+                    trendingNumbers[num] = trend;
+                }
+            }
+            
+            // En yüksek trende sahip sayıları al
+            var hotNumbers = trendingNumbers
+                .OrderByDescending(kvp => kvp.Value)
+                .Take(7)
+                .Select(kvp => kvp.Key)
                 .ToList();
 
             // 2. Soğuk sayılar stratejisi: En az tekrar eden sayıları bul
@@ -349,27 +386,168 @@ namespace CaseStudy.Application.Services.Impl
                     .FirstOrDefault()?.ToList() ?? new List<int>();
             }
 
-            // 3. Son sayıların tekrar etme olasılığını kontrol et
-            // Not: Sayılar listenin başında olduğu için ilk 15 sayıyı alıyoruz (daha fazla veri için)
-            var lastNumbers = numbers.Take(15).ToList();
+            // 3. GELİŞTİRME: Markov Zinciri benzeri bir yaklaşım
+            // Her sayıdan sonra hangi sayının geldiğini analiz ederek geçiş matrisini oluştur
+            var transitionMatrix = new Dictionary<int, Dictionary<int, int>>();
             
-            // 4. Çift/tek, kırmızı/siyah, yüksek/düşük dağılımlarını analiz et
-            // Son 30 sayıya daha fazla ağırlık ver
-            var recentNumbers = numbers.Take(Math.Min(30, numbers.Count)).ToList();
-            var olderNumbers = numbers.Skip(30).ToList();
+            // Tüm sayılar için geçiş matrisini başlat
+            for (int i = 0; i <= 36; i++)
+            {
+                transitionMatrix[i] = new Dictionary<int, int>();
+            }
             
-            // Son sayıların ağırlığı daha fazla olsun
-            var oddCount = recentNumbers.Count(n => n % 2 == 1 && n > 0) * 2 + olderNumbers.Count(n => n % 2 == 1 && n > 0);
-            var evenCount = recentNumbers.Count(n => n % 2 == 0 && n > 0) * 2 + olderNumbers.Count(n => n % 2 == 0 && n > 0);
-            var zeroCount = recentNumbers.Count(n => n == 0) * 2 + olderNumbers.Count(n => n == 0);
+            // Geçiş frekanslarını say
+            for (int i = 0; i < numbers.Count - 1; i++)
+            {
+                int currentNum = numbers[i];
+                int nextNum = numbers[i + 1];
+                
+                if (!transitionMatrix[currentNum].ContainsKey(nextNum))
+                {
+                    transitionMatrix[currentNum][nextNum] = 0;
+                }
+                
+                transitionMatrix[currentNum][nextNum]++;
+            }
             
-            var lowCount = recentNumbers.Count(n => n > 0 && n <= 18) * 2 + olderNumbers.Count(n => n > 0 && n <= 18);
-            var highCount = recentNumbers.Count(n => n > 18) * 2 + olderNumbers.Count(n => n > 18);
+            // Son birkaç sayıyı kontrol et ve mümkün olan sonraki sayıları bul
+            var lastNumbers = numbers.Take(10).ToList();
+            var markovCandidates = new Dictionary<int, double>();
+            
+            // Markov analizi - son sayıdan sonra en sık gelen sayılar
+            if (lastNumbers.Count > 0)
+            {
+                int lastNum = lastNumbers[0];
+                
+                if (transitionMatrix.ContainsKey(lastNum))
+                {
+                    foreach (var kvp in transitionMatrix[lastNum].OrderByDescending(k => k.Value))
+                    {
+                        markovCandidates[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+            
+            // Ayrıca son 2 sayı çiftinin en sık gelen 3. sayısını analiz et
+            if (lastNumbers.Count >= 2)
+            {
+                var pairTransitions = new Dictionary<(int, int), Dictionary<int, int>>();
+                
+                // Çiftlerden sonraki sayıları hesapla
+                for (int i = 0; i < numbers.Count - 2; i++)
+                {
+                    var pair = (numbers[i], numbers[i + 1]);
+                    int nextNum = numbers[i + 2];
+                    
+                    if (!pairTransitions.ContainsKey(pair))
+                    {
+                        pairTransitions[pair] = new Dictionary<int, int>();
+                    }
+                    
+                    if (!pairTransitions[pair].ContainsKey(nextNum))
+                    {
+                        pairTransitions[pair][nextNum] = 0;
+                    }
+                    
+                    pairTransitions[pair][nextNum]++;
+                }
+                
+                // Son 2 sayı çiftini kontrol et
+                var lastPair = (lastNumbers[1], lastNumbers[0]);
+                
+                if (pairTransitions.ContainsKey(lastPair))
+                {
+                    foreach (var kvp in pairTransitions[lastPair].OrderByDescending(k => k.Value))
+                    {
+                        // Çift analizine daha yüksek ağırlık ver
+                        if (markovCandidates.ContainsKey(kvp.Key))
+                        {
+                            markovCandidates[kvp.Key] += kvp.Value * 1.5;
+                        }
+                        else
+                        {
+                            markovCandidates[kvp.Key] = kvp.Value * 1.5;
+                        }
+                    }
+                }
+            }
+            
+            // 4. GELİŞTİRME: Sektör bazlı analiz ve gelişmiş dağılım analizi
+            // Rulet çarkındaki komşu sayıları sektör olarak grupla
+            var sectors = new List<List<int>>
+            {
+                new List<int> { 0, 32, 15, 19, 4, 21, 2, 25 },      // Sektör 1
+                new List<int> { 17, 34, 6, 27, 13, 36, 11, 30 },     // Sektör 2
+                new List<int> { 8, 23, 10, 5, 24, 16, 33, 1 },       // Sektör 3
+                new List<int> { 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26 }  // Sektör 4
+            };
+            
+            // Her sektörün son 50 sayıdaki frekansını hesapla
+            var recentNumbers = numbers.Take(Math.Min(50, numbers.Count)).ToList();
+            var sectorFrequency = new Dictionary<int, int>();
+            
+            for (int sectorIndex = 0; sectorIndex < sectors.Count; sectorIndex++)
+            {
+                sectorFrequency[sectorIndex] = recentNumbers.Count(n => sectors[sectorIndex].Contains(n));
+            }
+            
+            // En az çıkan sektörü belirle
+            int leastFrequentSectorIndex = sectorFrequency.OrderBy(kvp => kvp.Value).First().Key;
+            var candidateSector = sectors[leastFrequentSectorIndex];
+            
+            // Standart çift/tek, yüksek/düşük analizini de yapalım
+            // Geçmiş verilerden daha doğru eğilimleri tespit etmek için birkaç zaman penceresi kullanalım
+            var windows = new[] { 30, 60, 100, 150 };
+            var distributionTrends = new Dictionary<string, double>();
+            
+            foreach (var window in windows)
+            {
+                if (numbers.Count < window) continue;
+                
+                var slice = numbers.Take(window).ToList();
+                double weight = 1.0 + (1.0 / window * 100); // Küçük pencerelere daha yüksek ağırlık ver
+                
+                // Çift/tek istatistikleri
+                var oddCount = slice.Count(n => n % 2 == 1 && n > 0);
+                var evenCount = slice.Count(n => n % 2 == 0 && n > 0);
+                var zeroCount = slice.Count(n => n == 0);
+                
+                // Yüksek/düşük istatistikleri
+                var lowCount = slice.Count(n => n > 0 && n <= 18);
+                var highCount = slice.Count(n => n > 18);
+                
+                // Kırmızı/siyah istatistikleri
+                var redNumberList = new List<int> { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
+                var redCountWindow = slice.Count(n => redNumberList.Contains(n));
+                var blackCountWindow = slice.Count(n => n > 0 && !redNumberList.Contains(n));
+                
+                // Beklenen oranlara göre dengesizlikleri hesapla
+                distributionTrends["odd"] = distributionTrends.GetValueOrDefault("odd") + 
+                                           ((oddCount / (double)(window - zeroCount) < 0.5) ? weight : -weight);
+                                           
+                distributionTrends["even"] = distributionTrends.GetValueOrDefault("even") + 
+                                            ((evenCount / (double)(window - zeroCount) < 0.5) ? weight : -weight);
+                                            
+                distributionTrends["low"] = distributionTrends.GetValueOrDefault("low") + 
+                                           ((lowCount / (double)(window - zeroCount) < 0.5) ? weight : -weight);
+                                           
+                distributionTrends["high"] = distributionTrends.GetValueOrDefault("high") + 
+                                            ((highCount / (double)(window - zeroCount) < 0.5) ? weight : -weight);
+                                            
+                distributionTrends["red"] = distributionTrends.GetValueOrDefault("red") + 
+                                           ((redCountWindow / (double)(window - zeroCount) < 0.5) ? weight : -weight);
+                                           
+                distributionTrends["black"] = distributionTrends.GetValueOrDefault("black") + 
+                                              ((blackCountWindow / (double)(window - zeroCount) < 0.5) ? weight : -weight);
+                                              
+                distributionTrends["zero"] = distributionTrends.GetValueOrDefault("zero") + 
+                                            ((zeroCount / (double)window < 0.027) ? weight : -weight);
+            }
 
             // Kırmızı sayılar: 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36
             var redNumbers = new List<int> { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
-            var redCount = recentNumbers.Count(n => redNumbers.Contains(n)) * 2 + olderNumbers.Count(n => redNumbers.Contains(n));
-            var blackCount = recentNumbers.Count(n => n > 0 && !redNumbers.Contains(n)) * 2 + olderNumbers.Count(n => n > 0 && !redNumbers.Contains(n));
+            var redCount = recentNumbers.Count(n => redNumbers.Contains(n));
+            var blackCount = recentNumbers.Count(n => n > 0 && !redNumbers.Contains(n));
 
             // 5. Sayı dizilerini analiz et (ardışık sayılar, belirli aralıklar)
             var sequences = AnalyzeSequences(numbers);
@@ -377,10 +555,70 @@ namespace CaseStudy.Application.Services.Impl
             // 6. Sayıların tekrarlanma aralıklarını analiz et
             var recurrenceIntervals = AnalyzeRecurrenceIntervals(numbers);
 
+            // 5. GELİŞTİRME: Eksik sayı analizi
+            // Son 100 çekiliste hiç çıkmayan veya çok az çıkan sayıları bul
+            var last100 = numbers.Take(Math.Min(100, numbers.Count)).ToList();
+            var missingNumbersScore = new Dictionary<int, double>();
+            
+            for (int num = 0; num <= 36; num++)
+            {
+                int count = last100.Count(n => n == num);
+                int expectedCount = num == 0 ? 3 : 3; // 0 ve diğer sayıların beklenen frekansı
+                
+                if (count < expectedCount)
+                {
+                    // Eksik sayılara daha yüksek skor ver
+                    missingNumbersScore[num] = 1.0 + (expectedCount - count) / (double)expectedCount;
+                }
+            }
+            
+            // 6. GELİŞTİRME: Komşu sayı analizi
+            // Belirli sayıların yanında hangi sayıların çıktığını analiz et
+            // Rulet çarkındaki fiziksel komşulukları dikkate al
+            var wheelNumbers = new List<int> { 0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26 };
+            var numberPositions = new Dictionary<int, int>();
+            
+            for (int i = 0; i < wheelNumbers.Count; i++)
+            {
+                numberPositions[wheelNumbers[i]] = i;
+            }
+            
+            var neighborTransitions = new Dictionary<int, Dictionary<int, int>>();
+            foreach (var num in wheelNumbers)
+            {
+                neighborTransitions[num] = new Dictionary<int, int>();
+            }
+            
+            // Sayılar listesindeki komşu geçişlerini hesapla
+            for (int i = 0; i < numbers.Count - 1; i++)
+            {
+                int currentNum = numbers[i];
+                int nextNum = numbers[i + 1];
+                
+                if (!neighborTransitions[currentNum].ContainsKey(nextNum))
+                {
+                    neighborTransitions[currentNum][nextNum] = 0;
+                }
+                
+                neighborTransitions[currentNum][nextNum]++;
+            }
+            
             // Tüm stratejileri bir araya getirerek ağırlıklı bir tahmin yap
+            // Standart tahmin metodu ile başlangıç tahmini al
             var prediction = GeneratePrediction(hotNumbers, coldNumbers, lastNumbers, 
-                oddCount, evenCount, zeroCount, lowCount, highCount, redCount, blackCount, 
+                1, 1, 1, 1, 1, redCount, blackCount, // Basit dağılım değerleri
                 sequences, recurrenceIntervals);
+                
+            // Çoklu Zaman Ölçekli Analiz kullanalım
+            prediction = MultiTimeScaleAnalysis(
+                numbers, 
+                hotNumbers, 
+                coldNumbers, 
+                markovCandidates,
+                distributionTrends);
+
+            // TEST istatistiklerini toplama ve analiz etme kodu buraya eklenebilir
+            // Hangi stratejinin daha isabetli olduğunu anlamak için
 
             return prediction;
         }
@@ -1070,6 +1308,335 @@ namespace CaseStudy.Application.Services.Impl
                     ErrorMessage = $"Tahmin doğruluk analizi yapılırken hata oluştu: {ex.Message}"
                 };
             }
+        }
+        
+        /// <summary>
+        /// Çoklu Zaman Ölçekli Analiz metodu ile tahmin yapar
+        /// </summary>
+        /// <param name="numbers">Tüm sayılar listesi</param>
+        /// <param name="hotNumbers">Sıcak sayılar listesi</param>
+        /// <param name="coldNumbers">Soğuk sayılar listesi</param>
+        /// <param name="markovCandidates">Markov adayları</param>
+        /// <param name="distributionTrends">Dağılım trendleri</param>
+        /// <returns>Tahmini sayı</returns>
+        private int MultiTimeScaleAnalysis(
+            List<int> numbers,
+            List<int> hotNumbers,
+            List<int> coldNumbers,
+            Dictionary<int, double> markovCandidates,
+            Dictionary<string, double> distributionTrends)
+        {
+            // Farklı zaman ölçekleri (pencere boyutları)
+            var timeScales = new[] { 5, 10, 20, 50, 100 };
+            var scaleWeights = new Dictionary<int, double> { { 5, 1.0 }, { 10, 0.9 }, { 20, 0.8 }, { 50, 0.7 }, { 100, 0.6 } };
+            
+            // Sonuçları toplamak için sözlük
+            var numbersScore = new Dictionary<int, double>();
+            
+            // Her olasi sayı için başlangıç skoru belirle
+            for (int num = 0; num <= 36; num++)
+            {
+                numbersScore[num] = 1.0; // Başlangıç değeri
+            }
+            
+            // Her zaman ölçeği için işlem yap
+            foreach (var scale in timeScales)
+            {
+                // Eğer yeterli veri yoksa, bu ölçeği atla
+                if (numbers.Count < scale) continue;
+                
+                // Bu zaman ölçeği için sayıları al
+                var scaleNumbers = numbers.Take(scale).ToList();
+                
+                // Bu ölçek için frekans analizi
+                var frequencyAnalysis = AnalyzeFrequencyInTimeScale(scaleNumbers);
+                
+                // Bu ölçek için dizi analizi
+                var patternAnalysis = AnalyzePatternsInTimeScale(scaleNumbers);
+                
+                // Bu ölçek için dağılım analizi
+                var distributionAnalysis = AnalyzeDistributionInTimeScale(scaleNumbers);
+                
+                // Skorları birleştir
+                foreach (var kvp in frequencyAnalysis)
+                {
+                    numbersScore[kvp.Key] += kvp.Value * scaleWeights[scale];
+                }
+                
+                foreach (var kvp in patternAnalysis)
+                {
+                    if (numbersScore.ContainsKey(kvp.Key))
+                    {
+                        numbersScore[kvp.Key] += kvp.Value * scaleWeights[scale] * 1.5; // Desenlere daha yüksek ağırlık ver
+                    }
+                }
+                
+                foreach (var kvp in distributionAnalysis)
+                {
+                    if (numbersScore.ContainsKey(kvp.Key))
+                    {
+                        numbersScore[kvp.Key] += kvp.Value * scaleWeights[scale] * 1.2;
+                    }
+                }
+            }
+            
+            // Sıcak ve soğuk sayılarla entegrasyon
+            // Sıcak sayıların skorunu artır
+            foreach (var num in hotNumbers)
+            {
+                numbersScore[num] *= 1.3;
+            }
+            
+            // Soğuk sayıların skorunu azalt
+            foreach (var num in coldNumbers)
+            {
+                numbersScore[num] *= 0.8;
+            }
+            
+            // Markov tahminleriyle entegrasyon
+            foreach (var kvp in markovCandidates)
+            {
+                numbersScore[kvp.Key] += kvp.Value * 2.0; // Markov adaylarına yüksek ağırlık ver
+            }
+            
+            // Dağılım trendleriyle entegrasyon
+            if (distributionTrends.ContainsKey("odd") && distributionTrends["odd"] > 0)
+            {
+                for (int i = 1; i <= 35; i += 2)
+                {
+                    numbersScore[i] += distributionTrends["odd"] * 0.5;
+                }
+            }
+            
+            if (distributionTrends.ContainsKey("even") && distributionTrends["even"] > 0)
+            {
+                for (int i = 2; i <= 36; i += 2)
+                {
+                    numbersScore[i] += distributionTrends["even"] * 0.5;
+                }
+            }
+            
+            if (distributionTrends.ContainsKey("low") && distributionTrends["low"] > 0)
+            {
+                for (int i = 1; i <= 18; i++)
+                {
+                    numbersScore[i] += distributionTrends["low"] * 0.5;
+                }
+            }
+            
+            if (distributionTrends.ContainsKey("high") && distributionTrends["high"] > 0)
+            {
+                for (int i = 19; i <= 36; i++)
+                {
+                    numbersScore[i] += distributionTrends["high"] * 0.5;
+                }
+            }
+            
+            // En yüksek skora sahip sayıyı seç
+            return numbersScore.OrderByDescending(kvp => kvp.Value).First().Key;
+        }
+        
+        /// <summary>
+        /// Belirli bir zaman ölçeğinde sayıların frekansını analiz eder
+        /// </summary>
+        private Dictionary<int, double> AnalyzeFrequencyInTimeScale(List<int> numbers)
+        {
+            var result = new Dictionary<int, double>();
+            var frequency = new Dictionary<int, int>();
+            
+            // Frekansları hesapla
+            foreach (var num in numbers)
+            {
+                if (frequency.ContainsKey(num))
+                {
+                    frequency[num]++;
+                }
+                else
+                {
+                    frequency[num] = 1;
+                }
+            }
+            
+            // Frekansları skorlara dönüştür
+            double maxFreq = frequency.Any() ? frequency.Values.Max() : 1;
+            
+            foreach (var kvp in frequency)
+            {
+                // Sıklığa göre ağırlıklandır
+                result[kvp.Key] = kvp.Value / maxFreq;
+            }
+            
+            // Tüm olası sayılar için bir temel değer ata (0-36)
+            for (int i = 0; i <= 36; i++)
+            {
+                if (!result.ContainsKey(i))
+                {
+                    result[i] = 0.1; // Hiç görülmemiş sayılar için düşük bir başlangıç değeri
+                }
+            }
+            
+            return result;
+        }
+        
+        /// <summary>
+        /// Belirli bir zaman ölçeğinde desenleri analiz eder
+        /// </summary>
+        private Dictionary<int, double> AnalyzePatternsInTimeScale(List<int> numbers)
+        {
+            var result = new Dictionary<int, double>();
+            
+            // Tüm olası sayılar için başlangıç değeri ata
+            for (int i = 0; i <= 36; i++)
+            {
+                result[i] = 0.1;
+            }
+            
+            if (numbers.Count < 3) return result; // En az 3 sayı gerekli
+            
+            // Son 2 sayıyı al
+            var last2 = numbers.Take(2).ToList();
+            
+            // 2'li desenleri ara
+            for (int i = 2; i < numbers.Count; i++)
+            {
+                // Son 2 sayı ile eşleşen bir desen var mı?
+                if (numbers[i-2] == last2[0] && numbers[i-1] == last2[1])
+                {
+                    // Desen bulundu, bir sonraki sayının skorunu artır
+                    int nextNum = numbers[i];
+                    result[nextNum] += 1.0;
+                    
+                    // Komşu sayıların skorunu da artır (9 sağ/9 sol komsu kuralı)
+                    for (int neighbor = 1; neighbor <= 9; neighbor++)
+                    {
+                        int rightNeighbor = (nextNum + neighbor) % 37; // 37'ye göre mod alarak 0-36 aralığında tut
+                        int leftNeighbor = (nextNum - neighbor + 37) % 37; // Negatif değerleri önlemek için 37 ekle
+                        
+                        result[rightNeighbor] += 0.3 * (1.0 - (neighbor / 10.0)); // Uzaklık arttıkça etki azalsın
+                        result[leftNeighbor] += 0.3 * (1.0 - (neighbor / 10.0));
+                    }
+                }
+            }
+            
+            // Tek sayı desenleri ara
+            for (int i = 1; i < numbers.Count; i++)
+            {
+                // Son sayı ile eşleşen sayılar var mı?
+                if (numbers[i-1] == last2[0])
+                {
+                    // Eşleşme bulundu, bir sonraki sayının skorunu artır
+                    int nextNum = numbers[i];
+                    result[nextNum] += 0.5;
+                    
+                    // Komşu sayıların skorunu da artır (daha az etki)
+                    for (int neighbor = 1; neighbor <= 5; neighbor++) // Tek desenlerde daha az komşu sayı
+                    {
+                        int rightNeighbor = (nextNum + neighbor) % 37;
+                        int leftNeighbor = (nextNum - neighbor + 37) % 37;
+                        
+                        result[rightNeighbor] += 0.1 * (1.0 - (neighbor / 6.0));
+                        result[leftNeighbor] += 0.1 * (1.0 - (neighbor / 6.0));
+                    }
+                }
+            }
+            
+            return result;
+        }
+        
+        /// <summary>
+        /// Belirli bir zaman ölçeğinde sayı dağılımını analiz eder
+        /// </summary>
+        private Dictionary<int, double> AnalyzeDistributionInTimeScale(List<int> numbers)
+        {
+            var result = new Dictionary<int, double>();
+            
+            // Tüm olası sayılar için başlangıç değeri ata
+            for (int i = 0; i <= 36; i++)
+            {
+                result[i] = 0.1;
+            }
+            
+            if (numbers.Count < 5) return result; // Yeterli veri yok
+            
+            // Tek/Çift dağılımı
+            int oddCount = numbers.Count(n => n % 2 == 1 && n > 0);
+            int evenCount = numbers.Count(n => n % 2 == 0 && n > 0);
+            
+            // Düşük/Yüksek dağılımı
+            int lowCount = numbers.Count(n => n >= 1 && n <= 18);
+            int highCount = numbers.Count(n => n >= 19 && n <= 36);
+            
+            // Kırmızı/Siyah dağılımı
+            var redNumbers = new List<int> { 1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36 };
+            int redCount = numbers.Count(n => redNumbers.Contains(n));
+            int blackCount = numbers.Count(n => n > 0 && !redNumbers.Contains(n));
+            
+            // Sıfır sayısı
+            int zeroCount = numbers.Count(n => n == 0);
+            
+            // Dağılımlara göre skorları güncelle
+            
+            // Eğer tek sayılar daha azsa, tek sayıların skorunu artır
+            if (oddCount < evenCount * 0.8)
+            {
+                for (int i = 1; i <= 35; i += 2)
+                {
+                    result[i] += 0.5;
+                }
+            }
+            // Eğer çift sayılar daha azsa, çift sayıların skorunu artır
+            else if (evenCount < oddCount * 0.8)
+            {
+                for (int i = 2; i <= 36; i += 2)
+                {
+                    result[i] += 0.5;
+                }
+            }
+            
+            // Eğer düşük sayılar daha azsa, düşük sayıların skorunu artır
+            if (lowCount < highCount * 0.8)
+            {
+                for (int i = 1; i <= 18; i++)
+                {
+                    result[i] += 0.5;
+                }
+            }
+            // Eğer yüksek sayılar daha azsa, yüksek sayıların skorunu artır
+            else if (highCount < lowCount * 0.8)
+            {
+                for (int i = 19; i <= 36; i++)
+                {
+                    result[i] += 0.5;
+                }
+            }
+            
+            // Eğer kırmızı sayılar daha azsa, kırmızı sayıların skorunu artır
+            if (redCount < blackCount * 0.8)
+            {
+                foreach (var num in redNumbers)
+                {
+                    result[num] += 0.5;
+                }
+            }
+            // Eğer siyah sayılar daha azsa, siyah sayıların skorunu artır
+            else if (blackCount < redCount * 0.8)
+            {
+                for (int i = 1; i <= 36; i++)
+                {
+                    if (!redNumbers.Contains(i))
+                    {
+                        result[i] += 0.5;
+                    }
+                }
+            }
+            
+            // Eğer sıfır görülmemişse ve yeterli veri varsa, sıfırın skorunu artır
+            if (zeroCount == 0 && numbers.Count >= 20)
+            {
+                result[0] += 1.0;
+            }
+            
+            return result;
         }
         
         #endregion
