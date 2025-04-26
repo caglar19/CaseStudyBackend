@@ -32,23 +32,5 @@ namespace CaseStudy.Application.Interfaces
         /// <returns>Çıkarılan rulet sayıları</returns>
         Task<RouletteExtractNumbersResponseModel> ExtractNumbersFromHtml(string htmlContent);
         
-        /// <summary>
-        /// Gerçek çıkan sayıyı sisteme bildirir ve tahmin doğruluğunu günceller
-        /// </summary>
-        /// <param name="actualNumber">Gerçekte çıkan sayı</param>
-        /// <returns>Doğruluk güncelleme sonucu</returns>
-        Task<PredictionAccuracyResponse> RecordActualNumberAsync(int actualNumber);
-        
-        /// <summary>
-        /// Tüm tahmin stratejilerinin performansını getirir
-        /// </summary>
-        /// <returns>Strateji performans sonuçları</returns>
-        Task<List<StrategyPerformance>> GetStrategyPerformancesAsync();
-        
-        /// <summary>
-        /// Genel tahmin doğruluk oranlarını getirir
-        /// </summary>
-        /// <returns>Genel doğruluk analizi</returns>
-        Task<PredictionAccuracyResponse> GetPredictionAccuracyAsync();
     }
 }
