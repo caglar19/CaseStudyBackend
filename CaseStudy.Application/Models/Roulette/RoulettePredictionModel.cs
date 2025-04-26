@@ -46,14 +46,24 @@ namespace CaseStudy.Application.Models.Roulette
     public class RoulettePredictionResponse
     {
         /// <summary>
+        /// İşlem başarılı mı?
+        /// </summary>
+        public bool Success { get; set; }
+
+        /// <summary>
         /// Tahmin edilen bir sonraki sayı
         /// </summary>
-        public int PredictedNumber { get; set; }
+        public int Prediction { get; set; }
         
         /// <summary>
         /// Mevcut rulet sayıları
         /// </summary>
         public List<int> Numbers { get; set; } = new List<int>();
+        
+        /// <summary>
+        /// Varsa hata mesajı
+        /// </summary>
+        public string? ErrorMessage { get; set; }
         
         /// <summary>
         /// Tahmin için kullanılan stratejiler
@@ -63,7 +73,8 @@ namespace CaseStudy.Application.Models.Roulette
             "Sıcak Sayılar: En sık tekrar eden sayılar",
             "Soğuk Sayılar: Uzun süredir çıkmayan sayılar",
             "Dizi Analizi: Tekrar eden sayı dizileri",
-            "Dağılım Analizi: Çift/tek, kırmızı/siyah, yüksek/düşük"
+            "Dağılım Analizi: Çift/tek, kırmızı/siyah, yüksek/düşük",
+            "Tekrarlanma Aralığı Analizi: Sayıların ne sıklıkla geldiği"
         };
     }
     

@@ -2,161 +2,253 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using CaseStudy.Application.Interfaces;
 using CaseStudy.Application.Models.Roulette;
-using System.IO;
-using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Globalization;
+using MongoDB.Driver;
+
+// Kullanılacak modelleri açıkça belirt
+using RoulettePredictionResponseModel = CaseStudy.Application.Models.Roulette.RoulettePredictionResponse;
+using RouletteInitializeResponseModel = CaseStudy.Application.Models.Roulette.RouletteInitializeResponse;
+using RouletteExtractNumbersResponseModel = CaseStudy.Application.Models.Roulette.RouletteExtractNumbersResponse;
 
 namespace CaseStudy.Application.Services.Impl
 {
     public class RouletteService : IRouletteService
     {
-        private readonly ILogger<RouletteService> _logger;
-        private List<int> _rouletteNumbers = new List<int>();
-        private int _lastPrediction = -1;
-        private bool _isInitialized = false;
-        private readonly string _dataFilePath = "roulette_numbers.json";
-
-        public RouletteService(ILogger<RouletteService> logger)
+        private readonly IMongoCollection<RouletteData> _rouletteCollection;
+        private readonly IMongoCollection<PredictionResult> _predictionResultsCollection;
+        private readonly IMongoCollection<StrategyPerformance> _strategyPerformanceCollection;
+        private readonly string _defaultRouletteId = "default";
+        
+        // Tahmin stratejilerinin adları
+        private readonly List<string> _strategyNames = new List<string>
         {
-            _logger = logger;
-            LoadNumbersFromFile();
-        }
+            "hot_numbers",
+            "cold_numbers",
+            "odd_even_distribution",
+            "high_low_distribution",
+            "red_black_distribution",
+            "sequence_analysis",
+            "recurrence_intervals",
+            "recent_numbers_penalty"
+        };
+        
+        // Son tahmin - gerçek sonuç karşılaştırması için
+        private int _lastPredictedNumber = -1;
 
-        private void LoadNumbersFromFile()
+        public RouletteService(IOptions<MongoDBSettings> mongoSettings)
         {
             try
             {
-                if (File.Exists(_dataFilePath))
+                var client = new MongoClient(mongoSettings.Value.ConnectionString);
+                var database = client.GetDatabase(mongoSettings.Value.DatabaseName);
+                _rouletteCollection = database.GetCollection<RouletteData>(mongoSettings.Value.RouletteCollectionName);
+                _predictionResultsCollection = database.GetCollection<PredictionResult>(mongoSettings.Value.PredictionResultsCollectionName);
+                _strategyPerformanceCollection = database.GetCollection<StrategyPerformance>(mongoSettings.Value.StrategyPerformanceCollectionName);
+                
+                // Strateji performans kayıtlarını kontrol et ve yoksa oluştur
+                InitializeStrategyPerformanceTracking().Wait();
+            }
+            catch
+            {
+                throw;
+            }
+        }
+        
+        /// <summary>
+        /// Strateji performans kayıtlarını kontrol eder ve yoksa oluşturur
+        /// </summary>
+        private async Task InitializeStrategyPerformanceTracking()
+        {
+            try
+            {
+                foreach (var strategyName in _strategyNames)
                 {
-                    string jsonData = File.ReadAllText(_dataFilePath);
-                    var numbers = JsonSerializer.Deserialize<List<int>>(jsonData);
-                    if (numbers != null && numbers.Count > 0)
+                    var strategy = await _strategyPerformanceCollection.Find(s => s.StrategyName == strategyName).FirstOrDefaultAsync();
+                    
+                    if (strategy == null)
                     {
-                        _rouletteNumbers = numbers;
-                        _isInitialized = true;
-                        _logger.LogInformation($"Rulet verileri dosyadan yüklendi. Sayı adedi: {_rouletteNumbers.Count}");
+                        // Yeni strateji kaydı oluştur
+                        await _strategyPerformanceCollection.InsertOneAsync(new StrategyPerformance
+                        {
+                            StrategyName = strategyName,
+                            UsageCount = 0,
+                            CorrectPredictionCount = 0,
+                            DynamicWeight = 50, // Başlangıçta eşit ağırlık
+                            LastUpdated = DateTime.Now,
+                            RecentResults = new List<bool>()
+                        });
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogError(ex, "Rulet verileri dosyadan yüklenirken hata oluştu");
+                // Log hata - opsiyonel
             }
         }
 
-        private void SaveNumbersToFile()
+        private async Task<RouletteData> GetRouletteDataAsync()
         {
-            try
-            {
-                string jsonData = JsonSerializer.Serialize(_rouletteNumbers);
-                File.WriteAllText(_dataFilePath, jsonData);
-                _logger.LogInformation($"Rulet verileri dosyaya kaydedildi. Sayı adedi: {_rouletteNumbers.Count}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Rulet verileri dosyaya kaydedilirken hata oluştu");
-            }
+            return await _rouletteCollection.Find(r => r.Name == _defaultRouletteId).FirstOrDefaultAsync();
         }
 
-        public Task<RouletteInitializeResponse> InitializeWithNumbers(List<int> initialNumbers)
+        public async Task<RoulettePredictionResponseModel> InitializeNumbersAsync(List<int> initialNumbers)
         {
             try
             {
                 if (initialNumbers == null || initialNumbers.Count == 0)
                 {
-                    _logger.LogWarning("Geçersiz başlangıç verileri.");
-                    return Task.FromResult(new RouletteInitializeResponse
+                    return new RoulettePredictionResponseModel
+                    {
+                        Success = false,
+                        Prediction = -1,
+                        Numbers = new List<int>(),
+                        ErrorMessage = "Geçerli rulet sayıları verilmedi."
+                    };
+                }
+
+                var existingData = await GetRouletteDataAsync();
+
+                if (existingData != null)
+                {
+                    // Mevcut veriyi güncelle
+                    existingData.Numbers = initialNumbers;
+                    await _rouletteCollection.ReplaceOneAsync(r => r.Name == _defaultRouletteId, existingData);
+                }
+                else
+                {
+                    // Yeni veri oluştur
+                    var newData = new RouletteData
+                    {
+                        Name = _defaultRouletteId,
+                        Numbers = initialNumbers
+                    };
+                    await _rouletteCollection.InsertOneAsync(newData);
+                }
+
+                // Tahmin yap
+                int prediction = PredictNextNumber(initialNumbers);
+                
+                // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
+                _lastPredictedNumber = prediction;
+                
+                return new RoulettePredictionResponseModel
+                {
+                    Success = true,
+                    Prediction = prediction,
+                    Numbers = initialNumbers
+                };
+            }
+            catch
+            {
+                return new RoulettePredictionResponseModel
+                {
+                    Success = false,
+                    Prediction = -1,
+                    Numbers = new List<int>(),
+                    ErrorMessage = "Rulet sayıları yüklenirken hata oluştu."
+                };
+            }
+        }
+
+        public async Task<RouletteInitializeResponseModel> InitializeWithNumbers(List<int> initialNumbers)
+        {
+            try
+            {
+                if (initialNumbers == null || initialNumbers.Count == 0)
+                {
+                    return new RouletteInitializeResponseModel
                     {
                         Success = false,
                         NumbersCount = 0
-                    });
+                    };
                 }
 
-                _logger.LogInformation($"Rulet verileri yükleniyor. Sayı adedi: {initialNumbers.Count}");
-                _rouletteNumbers = new List<int>(initialNumbers);
-                _isInitialized = true;
+                // InitializeNumbersAsync metodunu çağırarak MongoDB'ye kaydet
+                await InitializeNumbersAsync(initialNumbers);
+                var data = await GetRouletteDataAsync();
+                int numbersCount = data?.Numbers?.Count ?? 0;
                 
-                // Verileri dosyaya kaydet
-                SaveNumbersToFile();
-                
-                return Task.FromResult(new RouletteInitializeResponse
+                return new RouletteInitializeResponseModel
                 {
                     Success = true,
-                    NumbersCount = _rouletteNumbers.Count
-                });
+                    NumbersCount = numbersCount
+                };
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "Rulet verileri yüklenirken hata oluştu");
-                return Task.FromResult(new RouletteInitializeResponse
+
+                return new RouletteInitializeResponseModel
                 {
                     Success = false,
                     NumbersCount = 0
-                });
+                };
             }
         }
 
-        public Task<RoulettePredictionResponse> AddNumberAndPredict(int newNumber)
+        public async Task<RoulettePredictionResponseModel> AddNumberAndPredict(int newNumber)
         {
             try
             {
-                _logger.LogInformation($"AddNumberAndPredict çağrıldı. Mevcut sayı adedi: {_rouletteNumbers.Count}, Başlatılmış mı: {_isInitialized}");
+                var rouletteData = await GetRouletteDataAsync();
                 
-                if (_rouletteNumbers.Count == 0 || !_isInitialized)
+                if (rouletteData == null)
                 {
-                    _logger.LogWarning("Henüz rulet verileri yüklenmemiş veya başlatılmamış.");
-                    return Task.FromResult(new RoulettePredictionResponse
+                    return new RoulettePredictionResponseModel
                     {
-                        PredictedNumber = -1,
-                        Numbers = new List<int>()
-                    });
+                        Success = false,
+                        ErrorMessage = "Henüz başlangıç verileri yüklenmemiş. Önce InitializeNumbersAsync metodunu çağırın.",
+                        Prediction = -1
+                    };
                 }
                 
-                // Yeni sayıyı listenin başına ekle
-                _rouletteNumbers.Insert(0, newNumber);
-                _logger.LogInformation($"Yeni sayı listenin başına eklendi: {newNumber}. Toplam sayı adedi: {_rouletteNumbers.Count}");
+                // Yeni sayıyı ekle
+                rouletteData.Numbers.Insert(0, newNumber); // Yeni sayıyı listenin başına ekle
                 
-                // Verileri dosyaya kaydet
-                SaveNumbersToFile();
+                // Veritabanını güncelle
+                await _rouletteCollection.ReplaceOneAsync(r => r.Name == _defaultRouletteId, rouletteData);
                 
                 // Tahmin yap
-                int prediction = PredictNextNumber(_rouletteNumbers);
-                _lastPrediction = prediction;
+                int prediction = PredictNextNumber(rouletteData.Numbers);
                 
-                return Task.FromResult(new RoulettePredictionResponse
+                // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
+                _lastPredictedNumber = prediction;
+                
+                return new RoulettePredictionResponseModel
                 {
-                    PredictedNumber = prediction,
-                    Numbers = new List<int>(_rouletteNumbers)
-                });
+                    Success = true,
+                    Prediction = prediction,
+                    Numbers = rouletteData.Numbers
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Sayı ekleme ve tahmin sırasında hata oluştu");
-                return Task.FromResult(new RoulettePredictionResponse
+                return new RoulettePredictionResponseModel
                 {
-                    PredictedNumber = -1,
-                    Numbers = new List<int>(_rouletteNumbers)
-                });
+                    Success = false,
+                    ErrorMessage = ex.Message,
+                    Prediction = -1
+                };
             }
         }
 
-        public Task<RouletteExtractNumbersResponse> ExtractNumbersFromHtml(string htmlContent)
+        public Task<RouletteExtractNumbersResponseModel> ExtractNumbersFromHtml(string htmlContent)
         {
             try
             {
-                _logger.LogInformation("HTML içeriğinden rulet sayıları çıkarılıyor");
+
                 
                 if (string.IsNullOrEmpty(htmlContent))
                 {
-                    _logger.LogWarning("Geçersiz HTML içeriği");
-                    return Task.FromResult(new RouletteExtractNumbersResponse
+    
+                    return Task.FromResult(new RouletteExtractNumbersResponseModel
                     {
                         Success = false,
-                        ErrorMessage = "HTML içeriği boş veya geçersiz"
+                        ErrorMessage = "HTML içeriği boş veya geçersiz",
+                        Numbers = new List<int>(),
+                        NumbersCount = 0
                     });
                 }
                 
@@ -194,30 +286,34 @@ namespace CaseStudy.Application.Services.Impl
                 
                 if (numbers.Count == 0)
                 {
-                    _logger.LogWarning("HTML içeriğinde rulet sayısı bulunamadı");
-                    return Task.FromResult(new RouletteExtractNumbersResponse
+    
+                    return Task.FromResult(new RouletteExtractNumbersResponseModel
                     {
                         Success = false,
-                        ErrorMessage = "HTML içeriğinde rulet sayısı bulunamadı"
+                        ErrorMessage = "HTML içeriğinde rulet sayısı bulunamadı",
+                        Numbers = new List<int>(),
+                        NumbersCount = 0
                     });
                 }
                 
-                _logger.LogInformation($"HTML içeriğinden {numbers.Count} adet rulet sayısı çıkarıldı");
+
                 
-                return Task.FromResult(new RouletteExtractNumbersResponse
+                return Task.FromResult(new RouletteExtractNumbersResponseModel
                 {
                     Success = true,
                     Numbers = numbers,
                     NumbersCount = numbers.Count
                 });
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "HTML içeriğinden rulet sayıları çıkarılırken hata oluştu");
-                return Task.FromResult(new RouletteExtractNumbersResponse
+
+                return Task.FromResult(new RouletteExtractNumbersResponseModel
                 {
                     Success = false,
-                    ErrorMessage = $"HTML içeriğinden rulet sayıları çıkarılırken hata oluştu: {ex.Message}"
+                    ErrorMessage = "HTML içeriğinden rulet sayıları çıkarılırken hata oluştu",
+                    Numbers = new List<int>(),
+                    NumbersCount = 0
                 });
             }
         }
@@ -278,13 +374,13 @@ namespace CaseStudy.Application.Services.Impl
             // 5. Sayı dizilerini analiz et (ardışık sayılar, belirli aralıklar)
             var sequences = AnalyzeSequences(numbers);
 
-            // 6. Komşu sayıların frekansını analiz et (9 sağ ve 9 sol komşu)
-            var neighborFrequency = AnalyzeNeighborFrequency(numbers);
+            // 6. Sayıların tekrarlanma aralıklarını analiz et
+            var recurrenceIntervals = AnalyzeRecurrenceIntervals(numbers);
 
             // Tüm stratejileri bir araya getirerek ağırlıklı bir tahmin yap
             var prediction = GeneratePrediction(hotNumbers, coldNumbers, lastNumbers, 
                 oddCount, evenCount, zeroCount, lowCount, highCount, redCount, blackCount, 
-                sequences, neighborFrequency);
+                sequences, recurrenceIntervals);
 
             return prediction;
         }
@@ -350,55 +446,46 @@ namespace CaseStudy.Application.Services.Impl
         }
         
         /// <summary>
-        /// 9 sağ ve 9 sol komşu sayıların frekansını analiz eder
+        /// Sayıların tekrarlanma aralıklarını analiz eder
         /// </summary>
         /// <param name="numbers">Analiz edilecek sayı listesi</param>
-        /// <returns>Her sayının komşularının frekansını içeren sözlük</returns>
-        private Dictionary<int, Dictionary<string, int>> AnalyzeNeighborFrequency(List<int> numbers)
+        /// <returns>Sayıların tekrarlanma aralıklarını içeren sözlük</returns>
+        private Dictionary<int, int> AnalyzeRecurrenceIntervals(List<int> numbers)
         {
-            // Her sayı için komşu sayıların frekansını tutacak sözlük
-            var neighborFrequency = new Dictionary<int, Dictionary<string, int>>();
+            var result = new Dictionary<int, int>();
             
-            // Tüm olası rulet sayıları için sözlük oluştur
-            for (int i = 0; i <= 36; i++)
+            if (numbers == null || numbers.Count < 10)
             {
-                neighborFrequency[i] = new Dictionary<string, int>
-                {
-                    { "right", 0 }, // 9 sağ komşu frekansı
-                    { "left", 0 }   // 9 sol komşu frekansı
-                };
+                return result;
             }
             
-            if (numbers == null || numbers.Count < 2)
-            {
-                return neighborFrequency;
-            }
+            // Her sayının tekrar etme aralığını hesapla
+            var lastOccurrenceIndex = new Dictionary<int, int>();
             
-            // Son 100 sayıyı analiz et (daha fazla veri için)
-            var recentNumbers = numbers.Take(Math.Min(100, numbers.Count)).ToList();
-            
-            // Her sayı için, sonraki sayının 9 sağ veya 9 sol komşusu olup olmadığını kontrol et
-            for (int i = 0; i < recentNumbers.Count - 1; i++)
+            for (int i = 0; i < numbers.Count; i++)
             {
-                int currentNumber = recentNumbers[i];
-                int nextNumber = recentNumbers[i + 1];
+                int num = numbers[i];
                 
-                // 9 sağ komşu kontrolü
-                int rightNeighbor = (currentNumber + 9) % 37; // 37'ye göre mod al (0-36 arası sayılar)
-                if (nextNumber == rightNeighbor)
+                if (lastOccurrenceIndex.ContainsKey(num))
                 {
-                    neighborFrequency[currentNumber]["right"]++;
+                    int interval = i - lastOccurrenceIndex[num];
+                    
+                    if (result.ContainsKey(num))
+                    {
+                        // Mevcut aralık ile ortalama al
+                        result[num] = (result[num] + interval) / 2;
+                    }
+                    else
+                    {
+                        result[num] = interval;
+                    }
                 }
                 
-                // 9 sol komşu kontrolü
-                int leftNeighbor = (currentNumber + 28) % 37; // (currentNumber - 9 + 37) % 37 ile aynı
-                if (nextNumber == leftNeighbor)
-                {
-                    neighborFrequency[currentNumber]["left"]++;
-                }
+                // Son görülme indeksini güncelle
+                lastOccurrenceIndex[num] = i;
             }
             
-            return neighborFrequency;
+            return result;
         }
 
         private int GeneratePrediction(
@@ -413,7 +500,7 @@ namespace CaseStudy.Application.Services.Impl
             int redCount,
             int blackCount,
             List<List<int>> sequences,
-            Dictionary<int, Dictionary<string, int>> neighborFrequency)
+            Dictionary<int, int> recurrenceIntervals)
         {
             var random = new Random(DateTime.Now.Millisecond); // Daha iyi rastgelelik için seed değerini değiştir
             var candidates = new List<int>();
@@ -641,46 +728,70 @@ namespace CaseStudy.Application.Services.Impl
                 }
             }
             
-            // Komşu sayılar stratejisi - 9 sağ ve 9 sol komşuları dikkate al
-            if (lastNumbers.Count > 0)
+            // Tekrarlanma aralıkları stratejisi - sayıların gelme sıklığını değerlendir
+            if (recurrenceIntervals.Any() && lastNumbers.Count > 0)
             {
-                // Son 5 sayının 9 sağ ve 9 sol komşularını değerlendir
-                for (int i = 0; i < Math.Min(5, lastNumbers.Count); i++)
+                // Tekrarlanma aralığı bilinen ve yakın zamanda gelme potansiyeli olan sayıları değerlendir
+                foreach (var kvp in recurrenceIntervals.OrderBy(k => k.Value)) // Aralığı en küçük olana öncelik ver
                 {
-                    int currentNum = lastNumbers[i];
+                    int number = kvp.Key;
+                    int interval = kvp.Value;
                     
-                    // 9 sağ komşu
-                    int rightNeighbor = (currentNum + 9) % 37;
-                    // 9 sol komşu
-                    int leftNeighbor = (currentNum + 28) % 37; // (currentNum - 9 + 37) % 37 ile aynı
+                    // Son çıkan sayının ne kadar önce çıktığını bul
+                    int lastOccurrence = -1;
+                    for (int i = 0; i < lastNumbers.Count; i++)
+                    {
+                        if (lastNumbers[i] == number)
+                        {
+                            lastOccurrence = i;
+                            break;
+                        }
+                    }
                     
-                    // Komşu sayıların frekansına göre ağırlık ver
-                    int rightFreq = neighborFrequency[currentNum]["right"];
-                    int leftFreq = neighborFrequency[currentNum]["left"];
-                    
-                    // Frekans ne kadar yüksekse, o kadar yüksek ağırlık ver
-                    int rightWeight = 2 + Math.Min(5, rightFreq * 2) + (i == 0 ? 2 : 0); // Son sayıya daha fazla ağırlık
-                    int leftWeight = 2 + Math.Min(5, leftFreq * 2) + (i == 0 ? 2 : 0);
-                    
-                    // Rastgele bir varyasyon ekle
-                    rightWeight += random.Next(0, 3);
-                    leftWeight += random.Next(0, 3);
-                    
-                    // Komşu sayıları aday listesine ekle
-                    AddOrUpdateCandidate(weightedCandidates, rightNeighbor, rightWeight);
-                    AddOrUpdateCandidate(weightedCandidates, leftNeighbor, leftWeight);
-                    
-                    // Kullanıcının bahis stratejisine uygun olarak, bu komşuların komşularına da düşük ağırlık ver
-                    // Yani tahmin edilen sayının 18 sağ ve 18 sol komşusuna da bahis koyulabilir
-                    int farRightNeighbor = (rightNeighbor + 9) % 37;
-                    int farLeftNeighbor = (leftNeighbor + 28) % 37;
-                    
-                    AddOrUpdateCandidate(weightedCandidates, farRightNeighbor, rightWeight / 2);
-                    AddOrUpdateCandidate(weightedCandidates, farLeftNeighbor, leftWeight / 2);
+                    // Eğer sayı son çıkan sayılardan biriyse
+                    if (lastOccurrence != -1)
+                    {
+                        // Tekrarlanma aralığına bakarak ağırlık hesapla
+                        // Örneğin sayı ortalama her 5 turda bir çıkıyorsa ve 4 tur önce çıktıysa, gelme ihtimali yüksek
+                        int cycleProgress = lastOccurrence + 1; // Sayının son çıkışından bu yana geçen tur sayısı
+                        double completionRatio = (double)cycleProgress / interval;
+                        
+                        // Tamamlanma oranına göre ağırlık ver
+                        // 0.8-1.2 arasındaki tamamlanma oranları en yüksek ağırlığı alır
+                        int weight = 0;
+                        
+                        if (completionRatio >= 0.8 && completionRatio <= 1.2)
+                        {
+                            // Sayı yakında çıkabilir, yüksek ağırlık ver
+                            weight = 6 + random.Next(0, 3);
+                        }
+                        else if (completionRatio > 0.5 && completionRatio < 1.5)
+                        {
+                            // Orta ihtimal
+                            weight = 3 + random.Next(0, 3);
+                        }
+                        else
+                        {
+                            // Düşük ihtimal
+                            weight = 1 + random.Next(0, 2);
+                        }
+                        
+                        // Düşük aralıklı sayılara bonus ver (sık tekrarlanan sayılar)
+                        if (interval <= 5)
+                        {
+                            weight += 2;
+                        }
+                        else if (interval <= 10)
+                        {
+                            weight += 1;
+                        }
+                        
+                        AddOrUpdateCandidate(weightedCandidates, number, weight);
+                    }
                 }
                 
-                // Standart komşu sayılar stratejisi (1 sağ, 1 sol)
-                if (random.NextDouble() < 0.2) // Daha düşük ihtimalle uygula
+                // Standart komşu sayılar stratejisi (1 sağ, 1 sol) - bunu koruyalım istatistiksel çeşitlilik için
+                if (random.NextDouble() < 0.3) // %30 ihtimalle uygula
                 {
                     int lastNum = lastNumbers[0];
                     int neighbor1 = (lastNum + 1) % 37;
@@ -750,6 +861,217 @@ namespace CaseStudy.Application.Services.Impl
             }
         }
 
+        #endregion
+
+        #region Tahmin Doğruluk Takibi ve Strateji Analizi
+        
+        /// <summary>
+        /// Gerçek çıkan sayıyı sisteme bildirir ve tahmin doğruluğunu günceller
+        /// </summary>
+        /// <param name="actualNumber">Gerçekte çıkan sayı</param>
+        /// <returns>Doğruluk güncelleme sonucu</returns>
+        public async Task<PredictionAccuracyResponse> RecordActualNumberAsync(int actualNumber)
+        {
+            try
+            {
+                if (_lastPredictedNumber == -1)
+                {
+                    return new PredictionAccuracyResponse 
+                    { 
+                        Success = false, 
+                        ErrorMessage = "Henüz bir tahmin yapılmamış. Önce AddNumberAndPredict metodunu çağırın." 
+                    };
+                }
+                
+                // Rulet verilerini al
+                var rouletteData = await GetRouletteDataAsync();
+                if (rouletteData == null || rouletteData.Numbers == null || rouletteData.Numbers.Count == 0)
+                {
+                    return new PredictionAccuracyResponse 
+                    { 
+                        Success = false, 
+                        ErrorMessage = "Rulet verileri bulunamadı veya boş." 
+                    };
+                }
+                
+                // Tahmin sonucunu kaydet
+                var predictionResult = new PredictionResult
+                {
+                    PredictedNumber = _lastPredictedNumber,
+                    ActualNumber = actualNumber,
+                    PredictionTime = DateTime.Now,
+                    NumbersUsed = new List<int>(rouletteData.Numbers),
+                    StrategyContributions = new Dictionary<string, int>()
+                };
+                
+                // Her strateji için katkıyı ekle - gerçek strateji katkıları için GeneratePrediction'ı güncellememiz gerekecek
+                // Şimdilik varsayılan değerler ekliyoruz
+                foreach (var strategyName in _strategyNames)
+                {
+                    predictionResult.StrategyContributions[strategyName] = 5; // Varsayılan orta ağırlık
+                }
+                
+                // Sonucu MongoDB'ye kaydet
+                await _predictionResultsCollection.InsertOneAsync(predictionResult);
+                
+                // Strateji performanslarını güncelle
+                foreach (var strategyName in _strategyNames)
+                {
+                    var strategy = await _strategyPerformanceCollection.Find(s => s.StrategyName == strategyName).FirstOrDefaultAsync();
+                    
+                    if (strategy != null)
+                    {
+                        // Kullanım sayısını arttır ve doğruysa doğru tahmin sayısını da arttır
+                        strategy.UsageCount++;
+                        
+                        // Tahmin edilen sayının 9 sağ ve 9 sol komşuları da doğru kabul edilecek
+                        int rightNeighbor = (_lastPredictedNumber + 9) % 37; // 9 sağ komşu
+                        int leftNeighbor = (_lastPredictedNumber + 28) % 37; // (currentNumber - 9 + 37) % 37 ile aynı, 9 sol komşu
+                        
+                        // Tam eşleşme, sağ komşu eşleşmesi veya sol komşu eşleşmesi olursa doğru say
+                        bool isCorrect = _lastPredictedNumber == actualNumber || rightNeighbor == actualNumber || leftNeighbor == actualNumber;
+                        
+                        if (isCorrect)
+                        {
+                            strategy.CorrectPredictionCount++;
+                        }
+                        
+                        // Son sonuçları güncelle
+                        if (strategy.RecentResults.Count >= 100)
+                        {
+                            strategy.RecentResults.RemoveAt(0); // En eski sonucu çıkar
+                        }
+                        strategy.RecentResults.Add(isCorrect);
+                        
+                        // Dinamik ağırlığı son performansa göre güncelle
+                        // Basit bir dinamik ayarlama: son 10 sonucun doğruluk oranına göre ağırlık ayarla
+                        if (strategy.RecentResults.Count >= 10)
+                        {
+                            int recentCorrect = strategy.RecentResults.TakeLast(10).Count(r => r);
+                            double recentAccuracy = (double)recentCorrect / 10;
+                            
+                            // Ağırlığı güncelle (20-80 aralığında)
+                            strategy.DynamicWeight = Math.Max(20, Math.Min(80, (int)(recentAccuracy * 100)));
+                        }
+                        
+                        strategy.LastUpdated = DateTime.Now;
+                        
+                        // MongoDB'yi güncelle
+                        await _strategyPerformanceCollection.ReplaceOneAsync(s => s.Id == strategy.Id, strategy);
+                    }
+                }
+                
+                // Sonuçları döndür
+                return await GetPredictionAccuracyAsync();
+            }
+            catch (Exception ex)
+            {
+                return new PredictionAccuracyResponse
+                {
+                    Success = false,
+                    ErrorMessage = $"Tahmin sonucu kaydedilirken hata oluştu: {ex.Message}"
+                };
+            }
+        }
+
+        /// <summary>
+        /// Tüm tahmin stratejilerinin performansını getirir
+        /// </summary>
+        /// <returns>Strateji performans sonuçları</returns>
+        public async Task<List<StrategyPerformance>> GetStrategyPerformancesAsync()
+        {
+            try
+            {
+                return await _strategyPerformanceCollection.Find(_ => true).ToListAsync();
+            }
+            catch (Exception)
+            {
+                return new List<StrategyPerformance>();
+            }
+        }
+
+        /// <summary>
+        /// Genel tahmin doğruluk oranlarını getirir
+        /// </summary>
+        /// <returns>Genel doğruluk analizi</returns>
+        public async Task<PredictionAccuracyResponse> GetPredictionAccuracyAsync()
+        {
+            try
+            {
+                // Tüm tahmin sonuçlarını getir
+                var allPredictions = await _predictionResultsCollection.Find(_ => true).ToListAsync();
+                var totalPredictions = allPredictions.Count;
+                
+                if (totalPredictions == 0)
+                {
+                    return new PredictionAccuracyResponse
+                    {
+                        Success = true,
+                        TotalPredictions = 0,
+                        CorrectPredictions = 0,
+                        Last10Accuracy = 0,
+                        Last50Accuracy = 0,
+                        Last100Accuracy = 0,
+                        MostSuccessfulStrategy = "Henüz veri yok",
+                        MostSuccessfulStrategyAccuracy = 0,
+                        StrategyPerformances = new List<StrategyPerformanceSummary>(),
+                        Last10Results = new List<int>()
+                    };
+                }
+                
+                // Doğru tahminlerin sayısını hesapla
+                var correctPredictions = allPredictions.Count(p => p.IsCorrect);
+                
+                // Son 10, 50 ve 100 tahminin doğruluk oranlarını hesapla
+                var last10 = allPredictions.OrderByDescending(p => p.PredictionTime).Take(10).ToList();
+                var last50 = allPredictions.OrderByDescending(p => p.PredictionTime).Take(50).ToList();
+                var last100 = allPredictions.OrderByDescending(p => p.PredictionTime).Take(100).ToList();
+                
+                var last10Accuracy = last10.Count > 0 ? (double)last10.Count(p => p.IsCorrect) / last10.Count : 0;
+                var last50Accuracy = last50.Count > 0 ? (double)last50.Count(p => p.IsCorrect) / last50.Count : 0;
+                var last100Accuracy = last100.Count > 0 ? (double)last100.Count(p => p.IsCorrect) / last100.Count : 0;
+                
+                // Strateji performanslarını getir
+                var strategies = await GetStrategyPerformancesAsync();
+                
+                // En başarılı stratejiyi bul
+                var mostSuccessful = strategies.OrderByDescending(s => s.RecentAccuracyRate).FirstOrDefault();
+                
+                // Son 10 sonucu listele (1: doğru, 0: yanlış)
+                var last10Results = last10.Select(p => p.IsCorrect ? 1 : 0).ToList();
+                
+                // Strateji performans özetlerini oluştur
+                var strategyPerformances = strategies.Select(s => new StrategyPerformanceSummary
+                {
+                    StrategyName = s.StrategyName,
+                    AccuracyRate = s.AccuracyRate,
+                    CurrentWeight = s.DynamicWeight
+                }).ToList();
+                
+                return new PredictionAccuracyResponse
+                {
+                    Success = true,
+                    TotalPredictions = totalPredictions,
+                    CorrectPredictions = correctPredictions,
+                    Last10Accuracy = last10Accuracy,
+                    Last50Accuracy = last50Accuracy,
+                    Last100Accuracy = last100Accuracy,
+                    MostSuccessfulStrategy = mostSuccessful?.StrategyName ?? "Veri yetersiz",
+                    MostSuccessfulStrategyAccuracy = mostSuccessful?.AccuracyRate ?? 0,
+                    StrategyPerformances = strategyPerformances,
+                    Last10Results = last10Results
+                };
+            }
+            catch (Exception ex)
+            {
+                return new PredictionAccuracyResponse
+                {
+                    Success = false,
+                    ErrorMessage = $"Tahmin doğruluk analizi yapılırken hata oluştu: {ex.Message}"
+                };
+            }
+        }
+        
         #endregion
     }
 }

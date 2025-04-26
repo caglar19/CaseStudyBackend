@@ -10,7 +10,7 @@ using CaseStudy.DataAccess.Persistence;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddApplication();
+builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddSwagger();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
@@ -18,7 +18,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", builder =>
     {
-        builder.AllowAnyOrigin() // Tüm origin'lere izin ver
+        builder.AllowAnyOrigin() // TÃ¼m origin'lere izin ver
                .AllowAnyMethod()
                .AllowAnyHeader();
     });
@@ -41,7 +41,7 @@ app.UseCors(corsPolicyBuilder =>
         .AllowAnyHeader()
 );
 app.UseCors("AllowAllOrigins"); // CORS middleware
-app.UseDeveloperExceptionPage(); // Geliþtirme ortamýnda hata sayfasý
+app.UseDeveloperExceptionPage(); // GeliÅŸtirme ortamÄ±nda hata sayfasÄ±
 
 app.UseRouting();
 

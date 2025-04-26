@@ -9,13 +9,17 @@ using CaseStudy.Shared.Services;
 using CaseStudy.Shared.Services.Impl;
 using CaseStudy.Application.Interfaces;
 using CaseStudy.Application.Services;
+using CaseStudy.Application.Models.Roulette;
 
 namespace CaseStudy.Application;
 
 public static class ApplicationDependencyInjection
 {
-    public static IServiceCollection AddApplication(this IServiceCollection services)
+    public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
     {
+        // MongoDB ayarlarını yapılandırmadan yükle
+        services.Configure<MongoDBSettings>(configuration.GetSection("MongoDbDatabaseSettings"));
+
         services.AddServices();
 
         services.RegisterAutoMapper();

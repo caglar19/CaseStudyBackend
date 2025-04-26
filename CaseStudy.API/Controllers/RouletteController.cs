@@ -1,12 +1,21 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using CaseStudy.Application.Interfaces;
 using CaseStudy.Application.Models.Roulette;
 using System.Text.Json;
+
+// Kullanılacak modelleri açıkça belirt
+using RoulettePredictionResponseModel = CaseStudy.Application.Models.Roulette.RoulettePredictionResponse;
+using RouletteInitializeResponseModel = CaseStudy.Application.Models.Roulette.RouletteInitializeResponse;
+using RouletteExtractNumbersResponseModel = CaseStudy.Application.Models.Roulette.RouletteExtractNumbersResponse;
+using RouletteInitializeRequestModel = CaseStudy.Application.Models.Roulette.RouletteInitializeRequest;
+using RouletteAddNumberRequestModel = CaseStudy.Application.Models.Roulette.RouletteAddNumberRequest;
+using RouletteExtractNumbersRequestModel = CaseStudy.Application.Models.Roulette.RouletteExtractNumbersRequest;
 
 namespace CaseStudy.API.Controllers
 {
@@ -29,7 +38,7 @@ namespace CaseStudy.API.Controllers
         /// <param name="request">İlk yüklenecek rulet sayıları</param>
         /// <returns>Yükleme sonucu</returns>
         [HttpPost("initialize")]
-        public async Task<ActionResult<RouletteInitializeResponse>> InitializeWithNumbers([FromBody] RouletteInitializeRequest request)
+        public async Task<ActionResult<RouletteInitializeResponseModel>> InitializeWithNumbers([FromBody] RouletteInitializeRequestModel request)
         {
             try
             {
@@ -38,8 +47,8 @@ namespace CaseStudy.API.Controllers
                     return BadRequest("Geçerli rulet sayıları sağlanmalıdır.");
                 }
 
-                var response = await _rouletteService.InitializeWithNumbers(request.InitialNumbers);
-                if (!response.Success)
+                var response = await _rouletteService.InitializeNumbersAsync(request.InitialNumbers);
+                if (response == null)
                 {
                     return BadRequest("Rulet verileri yüklenemedi.");
                 }
@@ -73,7 +82,7 @@ namespace CaseStudy.API.Controllers
         /// <returns>Çıkarılan rulet sayıları</returns>
         [HttpPost("extract-numbers")]
         [Consumes("application/json")]
-        public async Task<IActionResult> ExtractNumbersFromHtml([FromBody] RouletteExtractNumbersRequest request)
+        public async Task<IActionResult> ExtractNumbersFromHtml([FromBody] RouletteExtractNumbersRequestModel request)
         {
             try
             {
@@ -82,10 +91,12 @@ namespace CaseStudy.API.Controllers
                 if (request == null || string.IsNullOrEmpty(request.HtmlContent))
                 {
                     _logger.LogWarning("Geçersiz istek: HTML içeriği boş veya null");
-                    return BadRequest(new RouletteExtractNumbersResponse
+                    return BadRequest(new RouletteExtractNumbersResponseModel
                     {
                         Success = false,
-                        ErrorMessage = "HTML içeriği boş veya geçersiz"
+                        ErrorMessage = "HTML içeriği boş veya geçersiz",
+                        Numbers = new List<int>(),
+                        NumbersCount = 0
                     });
                 }
                 
@@ -99,6 +110,64 @@ namespace CaseStudy.API.Controllers
             {
                 _logger.LogError(ex, "HTML içeriğinden rulet sayıları çıkarılırken hata oluştu");
                 return StatusCode(500, "HTML içeriğinden rulet sayıları çıkarılırken bir hata oluştu.");
+            }
+        }
+        
+        /// <summary>
+        /// Gerçek çıkan sayıyı sisteme bildirir ve tahmin doğruluğunu günceller
+        /// </summary>
+        /// <param name="actualNumber">Gerçekte çıkan sayı</param>
+        /// <returns>Doğruluk güncelleme sonucu</returns>
+        [HttpPost("actual")]
+        public async Task<IActionResult> RecordActualNumber([FromBody] int actualNumber)
+        {
+            try
+            {
+                var result = await _rouletteService.RecordActualNumberAsync(actualNumber);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Gerçek rulet sayısı kaydedilirken hata oluştu");
+                return StatusCode(500, "Gerçek rulet sayısı kaydedilirken bir hata oluştu.");
+            }
+        }
+        
+        /// <summary>
+        /// Tüm tahmin stratejilerinin performansını getirir
+        /// </summary>
+        /// <returns>Strateji performans sonuçları</returns>
+        [HttpGet("strategies")]
+        public async Task<IActionResult> GetStrategyPerformances()
+        {
+            try
+            {
+                var strategies = await _rouletteService.GetStrategyPerformancesAsync();
+                return Ok(strategies);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Strateji performansları getirilirken hata oluştu");
+                return StatusCode(500, "Strateji performansları getirilirken bir hata oluştu.");
+            }
+        }
+        
+        /// <summary>
+        /// Genel tahmin doğruluk oranlarını getirir
+        /// </summary>
+        /// <returns>Genel doğruluk analizi</returns>
+        [HttpGet("accuracy")]
+        public async Task<IActionResult> GetPredictionAccuracy()
+        {
+            try
+            {
+                var accuracy = await _rouletteService.GetPredictionAccuracyAsync();
+                return Ok(accuracy);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Tahmin doğruluk analizi yapılırken hata oluştu");
+                return StatusCode(500, "Tahmin doğruluk analizi yapılırken bir hata oluştu.");
             }
         }
         
