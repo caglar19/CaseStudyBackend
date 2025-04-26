@@ -20,7 +20,13 @@ namespace CaseStudy.Application.Services.Impl
         private readonly IMongoCollection<RouletteData> _rouletteCollection;
         private readonly IMongoCollection<PredictionResult> _predictionResultsCollection;
         private readonly IMongoCollection<StrategyPerformance> _strategyPerformanceCollection;
+        private readonly IMongoCollection<PredictionRecord> _predictionRecordsCollection;
         private readonly string _defaultRouletteId = "default";
+        
+        // Rulet çarkındaki sayıların fiziksel dizilimi (saat yönünde)
+        private readonly int[] _wheelSequence = new int[] {
+            0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+        };
         
         // Tahmin stratejilerinin adları
         private readonly List<string> _strategyNames = new List<string>
@@ -47,6 +53,7 @@ namespace CaseStudy.Application.Services.Impl
                 _rouletteCollection = database.GetCollection<RouletteData>(mongoSettings.Value.RouletteCollectionName);
                 _predictionResultsCollection = database.GetCollection<PredictionResult>(mongoSettings.Value.PredictionResultsCollectionName);
                 _strategyPerformanceCollection = database.GetCollection<StrategyPerformance>(mongoSettings.Value.StrategyPerformanceCollectionName);
+                _predictionRecordsCollection = database.GetCollection<PredictionRecord>(mongoSettings.Value.PredictionRecordsCollectionName);
                 
                 // Strateji performans kayıtlarını kontrol et ve yoksa oluştur
                 InitializeStrategyPerformanceTracking().Wait();
@@ -134,6 +141,23 @@ namespace CaseStudy.Application.Services.Impl
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
                 _lastPredictedNumber = prediction;
                 
+                // Tahminin 9-sağ/9-sol komşularını hesapla ve kaydet
+                var neighbors = CalculateNeighbors(prediction);
+                
+                // Tahmin kaydını oluştur ve veritabanına kaydet
+                var predictionRecord = new PredictionRecord
+                {
+                    PredictionDate = DateTime.UtcNow,
+                    PredictedNumber = prediction,
+                    ActualNumber = null, // Henüz bilinmiyor, gerçek sayı girildiğinde güncellenecek
+                    IsCorrect = null, // Henüz bilinmiyor
+                    Context = initialNumbers.Take(5).ToArray(), // Son 5 sayı (bağlam)
+                    Strategy = "MultiTimeScaleAnalysis",
+                    Neighbors = neighbors
+                };
+                
+                await _predictionRecordsCollection.InsertOneAsync(predictionRecord);
+                
                 return new RoulettePredictionResponseModel
                 {
                     Success = true,
@@ -215,6 +239,23 @@ namespace CaseStudy.Application.Services.Impl
                 
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
                 _lastPredictedNumber = prediction;
+                
+                // Tahminin 9-sağ/9-sol komşularını hesapla ve kaydet
+                var neighbors = CalculateNeighbors(prediction);
+                
+                // Tahmin kaydını oluştur ve veritabanına kaydet
+                var predictionRecord = new PredictionRecord
+                {
+                    PredictionDate = DateTime.UtcNow,
+                    PredictedNumber = prediction,
+                    ActualNumber = null, // Henüz bilinmiyor, gerçek sayı girildiğinde güncellenecek
+                    IsCorrect = null, // Henüz bilinmiyor
+                    Context = rouletteData.Numbers.Take(5).ToArray(), // Son 5 sayı (bağlam)
+                    Strategy = "MultiTimeScaleAnalysis",
+                    Neighbors = neighbors
+                };
+                
+                await _predictionRecordsCollection.InsertOneAsync(predictionRecord);
                 
                 return new RoulettePredictionResponseModel
                 {
@@ -1640,5 +1681,62 @@ namespace CaseStudy.Application.Services.Impl
         }
         
         #endregion
+        
+        /// <summary>
+        /// Tahminin doğruluğunu kontrol eder (9-sağ/9-sol komşu kuralı)
+        /// </summary>
+        /// <param name="prediction">Tahmin edilen sayı</param>
+        /// <param name="actual">Gerçek çıkan sayı</param>
+        /// <returns>Tahmin doğru ise true, yanlış ise false</returns>
+        private bool IsCorrectPrediction(int prediction, int actual)
+        {
+            // Tahmin doğrudan doğru mu?
+            if (prediction == actual) return true;
+            
+            // Tahmin edilen sayının komşularını hesapla
+            var neighbors = CalculateNeighbors(prediction);
+            
+            // Gerçek sayı komşular içinde mi?
+            return neighbors.Contains(actual);
+        }
+        
+        /// <summary>
+        /// Bir sayının 9-sağ/9-sol komşularını hesaplar
+        /// </summary>
+        /// <param name="number">Komşuları hesaplanacak sayı</param>
+        /// <returns>Komşu sayılar dizisi</returns>
+        private int[] CalculateNeighbors(int number)
+        {
+            var neighbors = new List<int>();
+            
+            // Önce sayının çark üzerindeki pozisyonunu bul
+            int position = Array.IndexOf(_wheelSequence, number);
+            
+            if (position == -1)
+            {
+                // Eğer sayı çark üzerinde bulunamazsa boş dizi dön
+                return Array.Empty<int>();
+            }
+            
+            // Kendisi
+            neighbors.Add(number);
+            
+            // 9-sağ komşu (saat yönünde)
+            for (int i = 1; i <= 9; i++)
+            {
+                int rightPosition = (position + i) % _wheelSequence.Length;
+                neighbors.Add(_wheelSequence[rightPosition]);
+            }
+            
+            // 9-sol komşu (saat yönünün tersinde)
+            for (int i = 1; i <= 9; i++)
+            {
+                int leftPosition = (position - i);
+                if (leftPosition < 0) leftPosition += _wheelSequence.Length;
+                neighbors.Add(_wheelSequence[leftPosition]);
+            }
+            
+            return neighbors.ToArray();
+        }
     }
 }
