@@ -87,7 +87,7 @@ namespace CaseStudy.Application.Services.Impl
                     await _rouletteCollection.InsertOneAsync(newData);
                 }
 
-                // StrategyManager kullanarak tahmin yap
+                // StrategyManager kullanarak en başarılı strateji ile tahmin yap
                 int prediction = await _strategyManager.PredictNextNumberAsync(initialNumbers);
                 
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
@@ -171,7 +171,8 @@ namespace CaseStudy.Application.Services.Impl
                 // StrategyManager kullanarak yeni gelen sayıyla bir önceki tahmin için doğruluk güncellemesi yap
                 await _strategyManager.UpdatePredictionAccuracyAsync(number);
                 
-                // StrategyManager kullanarak bir sonraki sayı için tahmin yap
+                // StrategyManager kullanarak en başarılı strateji ile tahmin yap
+                // PredictNextNumberAsync metodu artık en başarılı stratejiyi kullanacak şekilde güncellendi
                 int prediction = await _strategyManager.PredictNextNumberAsync(rouletteData.Numbers);
                 
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)

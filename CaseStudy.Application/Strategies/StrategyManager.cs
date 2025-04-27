@@ -33,7 +33,7 @@ namespace CaseStudy.Application.Strategies
                 var client = new MongoClient(mongoSettings.Value.ConnectionString);
                 var database = client.GetDatabase(mongoSettings.Value.DatabaseName);
                 _predictionRecordsCollection = database.GetCollection<PredictionRecord>(mongoSettings.Value.PredictionRecordsCollectionName);
-                _strategyPerformanceCollection = database.GetCollection<StrategyPerformance>(mongoSettings.Value.StrategyPerformanceCollectionName);
+                _strategyPerformanceCollection = database.GetCollection<StrategyPerformance>("strategy_performance");
                 
                 // Tüm tahmin stratejilerini ekle
                 _strategies = new List<IPredictionStrategy>
@@ -112,135 +112,232 @@ namespace CaseStudy.Application.Strategies
                 return -1;
             }
             
-            // Tüm stratejilerin ağırlıklarını al
-            var strategyWeights = await GetStrategyWeightsAsync();
-            
-            // Her stratejinin tahminini al ve kaydet
-            var predictions = new Dictionary<string, int>();
-            var allPredictedNumbers = new List<int>();
-            
-            foreach (var strategy in _strategies)
+            // En başarılı strateji ile tahmin yap
+            return await PredictWithBestStrategyAsync(numbers);
+        }
+        
+        /// <summary>
+        /// Tüm stratejileri kullanarak tahmin yapar ve tüm tahminleri kaydeder
+        /// </summary>
+        /// <param name="numbers">Rulet sayıları</param>
+        /// <returns>Ağırlıklı tahmin sonuçları</returns>
+        public async Task<int> PredictWithAllStrategiesAsync(List<int> numbers)
+        {
+            try 
             {
-                try
+                // Tüm stratejiler için tahminleri topla
+                var predictionTasks = new List<Task<int>>();
+                var predictionResults = new Dictionary<string, int>(); // Strateji adı -> tahmin edilen sayı
+                
+                foreach (var strategy in _strategies)
                 {
-                    // Strateji ile tahmin yap
-                    int predictedNumber = strategy.PredictNextNumber(numbers);
-                    predictions[strategy.Name] = predictedNumber;
-                    allPredictedNumbers.Add(predictedNumber);
-                    
-                    // Tahminin komşularını hesapla
+                    predictionTasks.Add(Task.Run(() =>
+                    {
+                        var prediction = strategy.PredictNextNumber(numbers);
+                        return prediction;
+                    }));
+                }
+                
+                // Tüm tahminleri bekle
+                await Task.WhenAll(predictionTasks);
+                
+                // Tahmin sonuçlarını topla
+                for (int i = 0; i < _strategies.Count; i++)
+                {
+                    predictionResults[_strategies[i].Name] = predictionTasks[i].Result;
+                }
+                
+                // Her strateji için bir tahmin kaydı oluştur ve MongoDB'ye kaydet
+                foreach (var strategy in _strategies)
+                {
+                    int predictedNumber = predictionResults[strategy.Name];
                     var neighbors = CalculateNeighbors(predictedNumber);
                     
-                    // Tahmin kaydını oluştur ve veritabanına kaydet
-                    var predictionRecord = new PredictionRecord
+                    // Oluşturulan tahmini veritabanına kaydet
+                    var record = new PredictionRecord
                     {
-                        PredictionDate = DateTime.UtcNow,
-                        PredictedNumber = predictedNumber,
-                        ActualNumber = null, // Henüz bilinmiyor, bir sonraki tahmin isteğinde güncellenecek
-                        IsCorrect = null, // Henüz bilinmiyor
-                        Context = numbers.Take(5).ToArray(), // Son 5 sayı (bağlam)
+                        PredictionDate = DateTime.Now,
                         Strategy = strategy.Name,
+                        PredictedNumber = predictedNumber,
+                        ActualNumber = null, // henüz bilinmiyor
+                        IsCorrect = null, // henüz bilinmiyor
+                        Context = numbers.Take(5).ToArray(), // son 5 sayıyı sakla
                         Neighbors = neighbors
                     };
                     
-                    await _predictionRecordsCollection.InsertOneAsync(predictionRecord);
+                    await _predictionRecordsCollection.InsertOneAsync(record);
                 }
-                catch (Exception)
-                {
-                    // Strateji hata verirse, o stratejiyi atla
-                    continue;
-                }
-            }
-            
-            // Ağırlıklı karar verme - En çok tahmin edilen sayıyı veya en yüksek ağırlıklı stratejinin tahminini döndür
-            int finalPrediction;
-            
-            // Stratejilerin ağırlıklarına göre karar ver
-            if (strategyWeights.Count > 0)
-            {
-                // En yüksek performansa sahip stratejinin tahminini bul
-                var bestStrategy = strategyWeights.OrderByDescending(kv => kv.Value).First().Key;
-                if (predictions.ContainsKey(bestStrategy))
-                {
-                    finalPrediction = predictions[bestStrategy];
-                }
-                else
-                {
-                    // En sık tahmin edilen sayıyı bul
-                    finalPrediction = GetMostPredictedNumber(allPredictedNumbers);
-                }
-            }
-            else
-            {
-                // Ağırlık bilgisi yoksa, en sık tahmin edilen sayıyı bul
-                finalPrediction = GetMostPredictedNumber(allPredictedNumbers);
-            }
-            
-            return finalPrediction;
-        }
-
-        /// <summary>
-        /// En çok tahmin edilen sayıyı bulur
-        /// </summary>
-        private int GetMostPredictedNumber(List<int> predictions)
-        {
-            if (predictions == null || predictions.Count == 0)
-            {
-                return new Random(DateTime.Now.Millisecond).Next(0, 37);
-            }
-            
-            // En çok tekrarlanan sayıyı bul
-            var mostFrequent = predictions
-                .GroupBy(p => p)
-                .OrderByDescending(g => g.Count())
-                .ThenBy(g => Guid.NewGuid()) // Eşitlik durumunda rastgele seç
-                .Select(g => g.Key)
-                .FirstOrDefault();
                 
-            return mostFrequent;
-        }
-
-        /// <summary>
-        /// Strateji performanslarını alır ve dinamik ağırlıkları hesaplar
-        /// </summary>
-        private async Task<Dictionary<string, double>> GetStrategyWeightsAsync()
-        {
-            var result = new Dictionary<string, double>();
-            
-            try
-            {
-                var performances = await _strategyPerformanceCollection.Find(Builders<StrategyPerformance>.Filter.Empty)
-                                                                       .ToListAsync();
-                
-                foreach (var perf in performances)
-                {
-                    double successRate = perf.UsageCount > 0 
-                        ? (double)perf.CorrectPredictionCount / perf.UsageCount 
-                        : 0.5; // Başlangıç oranı
-                        
-                    // Son 10 sonucun ağırlığını artır (daha güncel performans)
-                    if (perf.RecentResults.Count > 0)
-                    {
-                        double recentSuccessRate = (double)perf.RecentResults.Count(r => r) / perf.RecentResults.Count;
-                        // Son sonuçlar %60, genel performans %40 ağırlıklı
-                        successRate = (successRate * 0.4) + (recentSuccessRate * 0.6);
-                    }
-                    
-                    // Dinamik ağırlık, başarı oranına ve kısmen de önceki ağırlığa bağlı
-                    double dynamicWeight = (successRate * 100 * 0.7) + (perf.DynamicWeight * 0.3);
-                    result[perf.StrategyName] = dynamicWeight;
-                }
+                // Ağırlıklı bir sonuç döndür
+                return await GetWeightedPredictionAsync(predictionResults);
             }
             catch (Exception)
             {
-                // Hata durumunda tüm stratejilere eşit ağırlık ver
-                foreach (var strategy in _strategies)
+                // Herhangi bir hata durumunda, 0-36 arası rastgele bir sayı döndür
+                return new Random().Next(0, 37);
+            }
+        }
+        
+        /// <summary>
+        /// En başarılı stratejiyi bulup sadece o stratejiyi kullanarak tahmin yapar
+        /// </summary>
+        /// <param name="numbers">Rulet sayıları</param>
+        /// <returns>En başarılı stratejinin tahmini</returns>
+        public async Task<int> PredictWithBestStrategyAsync(List<int> numbers)
+        {
+            try
+            {
+                // En başarılı stratejiyi bul
+                var bestStrategy = await FindBestPerformingStrategyAsync();
+                
+                if (bestStrategy == null)
                 {
-                    result[strategy.Name] = 50.0;
+                    // En başarılı strateji bulunamazsa, tüm stratejileri kullan
+                    return await PredictWithAllStrategiesAsync(numbers);
                 }
+                
+                // En başarılı strateji ile tahmin yap
+                IPredictionStrategy strategy = _strategies.FirstOrDefault(s => s.Name == bestStrategy.StrategyName);
+                
+                if (strategy == null)
+                {
+                    // Strateji bulunamazsa tüm stratejileri kullan
+                    return await PredictWithAllStrategiesAsync(numbers);
+                }
+                
+                // Tahmin yap
+                int predictedNumber = strategy.PredictNextNumber(numbers);
+                var neighbors = CalculateNeighbors(predictedNumber);
+                
+                // Tahmini veritabanına kaydet
+                var record = new PredictionRecord
+                {
+                    PredictionDate = DateTime.Now,
+                    Strategy = strategy.Name,
+                    PredictedNumber = predictedNumber,
+                    ActualNumber = null, // henüz bilinmiyor
+                    IsCorrect = null, // henüz bilinmiyor
+                    Context = numbers.Take(5).ToArray(), // son 5 sayıyı sakla
+                    Neighbors = neighbors
+                };
+                
+                await _predictionRecordsCollection.InsertOneAsync(record);
+                
+                return predictedNumber;
+            }
+            catch (Exception)
+            {
+                // Hata durumunda tüm stratejileri kullan
+                return await PredictWithAllStrategiesAsync(numbers);
+            }
+        }
+        
+        /// <summary>
+        /// Mevcut verilere göre en başarılı stratejiyi bulur
+        /// </summary>
+        /// <returns>En başarılı strateji performansı</returns>
+        private async Task<StrategyPerformance> FindBestPerformingStrategyAsync()
+        {
+            try
+            {
+                // Tüm stratejilerin performans kayıtlarını getir
+                var performances = await _strategyPerformanceCollection
+                    .Find(_ => true)
+                    .ToListAsync();
+                
+                if (performances == null || performances.Count == 0)
+                    return null;
+                
+                // En az 5 kez kullanılmış ve en yüksek başarı oranına sahip stratejiyi bul
+                return performances
+                    .Where(p => p.UsageCount >= 5) // en az 5 kez kullanılmış olmalı
+                    .OrderByDescending(p => (double)p.CorrectPredictionCount / (p.UsageCount > 0 ? p.UsageCount : 1)) // başarı oranına göre sırala
+                    .FirstOrDefault();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Ağırlıklı bir tahmin sonucu hesaplar
+        /// </summary>
+        /// <param name="predictions">Tahminler</param>
+        /// <returns>Ağırlıklı tahmin</returns>
+        private async Task<int> GetWeightedPredictionAsync(Dictionary<string, int> predictions)
+        {
+            try
+            {
+                // Tüm strateji performanslarını getir
+                var performances = await _strategyPerformanceCollection
+                    .Find(_ => true)
+                    .ToListAsync();
+                
+                // Her tahmin için ağırlıklı oy hesapla
+                var weightedVotes = new Dictionary<int, double>();
+                
+                foreach (var prediction in predictions)
+                {
+                    string strategyName = prediction.Key;
+                    int predictedNumber = prediction.Value;
+                    
+                    // Stratejinin ağırlığını bul
+                    var performance = performances.FirstOrDefault(p => p.StrategyName == strategyName);
+                    double weight = performance?.DynamicWeight ?? 50; // Eğer yoksa varsayılan ağırlık
+                    
+                    // Bu sayıya oy ekle
+                    if (!weightedVotes.ContainsKey(predictedNumber))
+                    {
+                        weightedVotes[predictedNumber] = 0;
+                    }
+                    
+                    weightedVotes[predictedNumber] += weight;
+                }
+                
+                // En yüksek ağırlıklı oyu bul
+                if (weightedVotes.Count > 0)
+                {
+                    return weightedVotes.OrderByDescending(wv => wv.Value).First().Key;
+                }
+                
+                // Eğer hiç oy yoksa, en sık tahmin edilen sayıyı döndür
+                return GetMostPredictedNumber(predictions.Values.ToList());
+            }
+            catch
+            {
+                // Hata durumunda, tahminlerden rastgele birini seç
+                if (predictions.Count > 0)
+                {
+                    return predictions.Values.ElementAt(new Random().Next(predictions.Count));
+                }
+                
+                return new Random().Next(0, 37);
+            }
+        }
+        
+        /// <summary>
+        /// En çok tahmin edilen sayıyı bulur
+        /// </summary>
+        /// <param name="predictions">Tahminler</param>
+        /// <returns>En çok tahmin edilen sayı</returns>
+        private int GetMostPredictedNumber(List<int> predictions)
+        {
+            // Frekansı hesapla
+            var frequency = new Dictionary<int, int>();
+            
+            foreach (var number in predictions)
+            {
+                if (!frequency.ContainsKey(number))
+                {
+                    frequency[number] = 0;
+                }
+                
+                frequency[number]++;
             }
             
-            return result;
+            // En çok tekrar eden sayıyı bul
+            return frequency.OrderByDescending(f => f.Value).First().Key;
         }
 
         /// <summary>
@@ -251,89 +348,111 @@ namespace CaseStudy.Application.Strategies
         {
             try
             {
-                // En son iki tahmin kaydını bul
-                var allRecords = await _predictionRecordsCollection.Find(Builders<PredictionRecord>.Filter.Empty)
-                                                     .Sort(Builders<PredictionRecord>.Sort.Descending(pr => pr.PredictionDate))
-                                                     .Limit(20) // Her strateji için son kaydı alabilmek için biraz fazla al
-                                                     .ToListAsync();
+                // Son tahmin sonuçlarını (henüz gerçekleşmemiş) getir
+                var predictionRecords = await _predictionRecordsCollection
+                    .Find(r => r.ActualNumber == null) // henüz gerçekleşmemiş tahminler
+                    .ToListAsync();
                 
-                // Stratejilere göre gruplama yap ve her strateji için en son tahmini bul
-                var lastPredictionsByStrategy = allRecords
-                    .GroupBy(pr => pr.Strategy)
-                    .ToDictionary(
-                        g => g.Key, 
-                        g => g.OrderByDescending(pr => pr.PredictionDate).First()
-                    );
-                
-                // Her strateji için kontrol et ve güncelle
-                foreach (var strategy in _strategies)
+                if (predictionRecords == null || predictionRecords.Count == 0)
                 {
-                    if (lastPredictionsByStrategy.TryGetValue(strategy.Name, out var predictionRecord))
+                    return;
+                }
+                
+                // Her strateji için tahmin doğruluğunu kontrol et
+                foreach (var record in predictionRecords)
+                {
+                    // Bu stratejiyi bul
+                    IPredictionStrategy strategy = _strategies.FirstOrDefault(s => s.Name == record.Strategy);
+                    
+                    if (strategy == null)
                     {
-                        // Stratejinin doğruluk kontrolünü yap
-                        bool isCorrect = strategy.CheckPredictionAccuracy(
-                            predictionRecord.PredictedNumber, 
-                            actualNumber,
-                            predictionRecord.Neighbors
-                        );
-                        
-                        // Prediksiyon kaydını güncelle
-                        predictionRecord.ActualNumber = actualNumber;
-                        predictionRecord.IsCorrect = isCorrect;
-                        
-                        await _predictionRecordsCollection.ReplaceOneAsync(
-                            Builders<PredictionRecord>.Filter.Eq(pr => pr.Id, predictionRecord.Id),
-                            predictionRecord);
-                            
-                        // Strateji performans kaydını güncelle
-                        await UpdateStrategyPerformanceAsync(strategy.Name, isCorrect);
+                        continue;
                     }
+                    
+                    // Tahminin komşuları
+                    int[] neighbors = record.Neighbors;
+                    
+                    // Strateji ile tahmin doğruluğunu kontrol et
+                    bool isCorrect = strategy.CheckPredictionAccuracy(record.PredictedNumber, actualNumber, neighbors);
+                    
+                    // İşlemleri atomik olarak yapmak için doğrudan kayıtları güncelle
+                    record.ActualNumber = actualNumber;
+                    record.IsCorrect = isCorrect || neighbors.Contains(actualNumber); // tam doğru veya komşu sayı
+                    
+                    // Kaydı güncelle
+                    await _predictionRecordsCollection.ReplaceOneAsync(
+                        r => r.Id == record.Id,
+                        record
+                    );
+                    
+                    // Strateji performansını güncelle
+                    await UpdateStrategyPerformanceAsync(record.Strategy, record.IsCorrect ?? false);
                 }
             }
-            catch (Exception)
+            catch
             {
-                // Hata durumunda işlemi sessizce geç
+                // Hata durumunda sessizce devam et
             }
         }
-
+        
         /// <summary>
         /// Strateji performans kayıtlarını günceller
         /// </summary>
+        /// <param name="strategyName">Strateji adı</param>
+        /// <param name="isCorrect">Doğru tahmin mi?</param>
         private async Task UpdateStrategyPerformanceAsync(string strategyName, bool isCorrect)
         {
             try
             {
-                var performance = await _strategyPerformanceCollection.Find(s => s.StrategyName == strategyName).FirstOrDefaultAsync();
+                // Strateji performans kaydını bul
+                var performance = await _strategyPerformanceCollection
+                    .Find(p => p.StrategyName == strategyName)
+                    .FirstOrDefaultAsync();
                 
-                if (performance != null)
+                if (performance == null)
                 {
-                    // Kullanım sayısını artır
-                    performance.UsageCount++;
-                    
-                    // Doğru tahmin sayısını güncelle
-                    if (isCorrect)
+                    // Performans kaydı yoksa yeni oluştur
+                    performance = new StrategyPerformance
                     {
-                        performance.CorrectPredictionCount++;
-                    }
-                    
-                    // Son sonuçları güncelle
-                    if (performance.RecentResults == null)
-                    {
-                        performance.RecentResults = new List<bool>();
-                    }
-                    
-                    performance.RecentResults.Add(isCorrect);
-                    
-                    // Sadece son 10 sonucu tut
-                    if (performance.RecentResults.Count > 10)
-                    {
-                        performance.RecentResults = performance.RecentResults.Skip(performance.RecentResults.Count - 10).ToList();
-                    }
-                    
-                    // Dinamik ağırlığı güncelle
+                        StrategyName = strategyName,
+                        UsageCount = 0,
+                        CorrectPredictionCount = 0,
+                        DynamicWeight = 50, // Başlangıçta eşit ağırlık
+                        LastUpdated = DateTime.Now,
+                        RecentResults = new List<bool>()
+                    };
+                }
+                
+                // Performans kayıtlarını güncelle
+                performance.UsageCount++;
+                
+                if (isCorrect)
+                {
+                    performance.CorrectPredictionCount++;
+                }
+                
+                // Son 10 sonucu sakla
+                if (performance.RecentResults == null)
+                {
+                    performance.RecentResults = new List<bool>();
+                }
+                
+                performance.RecentResults.Insert(0, isCorrect);
+                
+                // Sadece son 10 sonucu tut
+                if (performance.RecentResults.Count > 10)
+                {
+                    performance.RecentResults = performance.RecentResults.Take(10).ToList();
+                }
+                
+                // Yeni ağırlık hesapla
+                if (performance.UsageCount > 0)
+                {
                     double successRate = (double)performance.CorrectPredictionCount / performance.UsageCount;
+                    
+                    // Son 10 sonucun başarı oranı (daha yeni sonuçlar daha önemli)
                     double recentSuccessRate = performance.RecentResults.Count > 0
-                        ? (double)performance.RecentResults.Count(r => r) / performance.RecentResults.Count
+                        ? performance.RecentResults.Count(r => r) / (double)performance.RecentResults.Count
                         : 0;
                         
                     // Ağırlık hesapla: genel başarı %30, son başarı %70 etkili
@@ -342,53 +461,86 @@ namespace CaseStudy.Application.Strategies
                     
                     // Veritabanını güncelle
                     await _strategyPerformanceCollection.ReplaceOneAsync(
-                        Builders<StrategyPerformance>.Filter.Eq(s => s.Id, performance.Id),
-                        performance);
+                        p => p.StrategyName == strategyName,
+                        performance
+                    );
                 }
             }
-            catch (Exception)
+            catch
             {
-                // Hata durumunda işlemi sessizce geç
+                // Hata durumunda sessizce devam et
             }
         }
-
+        
         /// <summary>
         /// Bir sayının 9-sağ/9-sol komşularını hesaplar
         /// </summary>
-        /// <param name="number">Komşuları hesaplanacak sayı</param>
-        /// <returns>Komşu sayılar dizisi</returns>
+        /// <param name="number">Sayı</param>
+        /// <returns>Komşu sayılar</returns>
         private int[] CalculateNeighbors(int number)
         {
-            var neighbors = new List<int>();
+            int[] neighbors = new int[18]; // 9 sağ + 9 sol = 18 komşu
             
-            // Önce sayının çark üzerindeki pozisyonunu bul
+            // Çarkta sayının pozisyonunu bul
             int position = Array.IndexOf(_wheelSequence, number);
             
+            // Eğer sayı çarkta bulunamazsa, boş dizi döndür
             if (position == -1)
             {
-                // Eğer sayı çark üzerinde bulunamazsa boş dizi dön
-                return Array.Empty<int>();
+                return new int[0];
             }
             
-            // Kendisi
-            neighbors.Add(number);
+            // 9 sol komşuyu hesapla
+            for (int i = 1; i <= 9; i++)
+            {
+                int leftPosition = (position - i + _wheelSequence.Length) % _wheelSequence.Length;
+                neighbors[i - 1] = _wheelSequence[leftPosition];
+            }
             
-            // 9-sağ komşu (saat yönünde)
+            // 9 sağ komşuyu hesapla
             for (int i = 1; i <= 9; i++)
             {
                 int rightPosition = (position + i) % _wheelSequence.Length;
-                neighbors.Add(_wheelSequence[rightPosition]);
+                neighbors[9 + i - 1] = _wheelSequence[rightPosition];
             }
             
-            // 9-sol komşu (saat yönünün tersinde)
-            for (int i = 1; i <= 9; i++)
+            return neighbors;
+        }
+        
+        /// <summary>
+        /// Bir sayının belirli sayıda komşusunu alır
+        /// </summary>
+        /// <param name="number">Merkez sayı</param>
+        /// <param name="neighborCount">Tek yönde komşu sayısı</param>
+        /// <returns>Komşu sayılar</returns>
+        private int[] GetNeighbors(int number, int neighborCount)
+        {
+            int[] neighbors = new int[neighborCount * 2]; // sol + sağ komşular
+            
+            // Çarkta sayının pozisyonunu bul
+            int position = Array.IndexOf(_wheelSequence, number);
+            
+            // Eğer sayı çarkta bulunamazsa, boş dizi döndür
+            if (position == -1)
             {
-                int leftPosition = (position - i);
-                if (leftPosition < 0) leftPosition += _wheelSequence.Length;
-                neighbors.Add(_wheelSequence[leftPosition]);
+                return new int[0];
             }
             
-            return neighbors.ToArray();
+            // Sol komşuları hesapla
+            for (int i = 1; i <= neighborCount; i++)
+            {
+                int leftPosition = (position - i + _wheelSequence.Length) % _wheelSequence.Length;
+                neighbors[i - 1] = _wheelSequence[leftPosition];
+            }
+            
+            // Sağ komşuları hesapla
+            for (int i = 1; i <= neighborCount; i++)
+            {
+                int rightPosition = (position + i) % _wheelSequence.Length;
+                neighbors[neighborCount + i - 1] = _wheelSequence[rightPosition];
+            }
+            
+            return neighbors;
         }
     }
 }
