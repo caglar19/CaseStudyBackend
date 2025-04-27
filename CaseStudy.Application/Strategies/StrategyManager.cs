@@ -45,7 +45,18 @@ namespace CaseStudy.Application.Strategies
                     new RedBlackDistributionStrategy(),
                     new SequenceAnalysisStrategy(),
                     new RecurrenceIntervalsStrategy(),
-                    new RecentNumbersPenaltyStrategy()
+                    new RecentNumbersPenaltyStrategy(),
+                    new MonteCarloSimulationStrategy(),
+                    new MachineLearningStrategy(),
+                    new SectorBasedAnalysisStrategy(),
+                    new MarkovChainStrategy(),
+                    new TrigramAnalysisStrategy(),
+                    new BayesianAnalysisStrategy(),
+                    new TemporalAnalysisStrategy(),
+                    new HybridPredictionStrategy(),
+                    new MotionVectorStrategy(),
+                    new GoldenRatioStrategy(),
+                    new IntuitiveAnalysisStrategy()
                 };
                 
                 // Strateji performans kayıtlarını kontrol et ve yoksa oluştur
