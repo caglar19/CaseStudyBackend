@@ -30,7 +30,7 @@ namespace CaseStudy.Application.Strategies
             var random = new Random(DateTime.Now.Millisecond);
             
             // Son 50 sayıdaki tek/çift dağılımını incele
-            var recentNumbers = numbers.Take(Math.Min(50, numbers.Count)).ToList();
+            var recentNumbers = numbers.Take(Math.Min(500, numbers.Count)).ToList();
             
             // Tek/çift istatistikleri
             var oddCount = recentNumbers.Count(n => n % 2 == 1 && n > 0); // Tek sayılar
@@ -110,15 +110,8 @@ namespace CaseStudy.Application.Strategies
                 return true;
             }
             
-            // Tek/çift kategorisi doğru mu? (Daha esnek bir doğruluk tanımı)
-            // Sadece tahmin edilen ve gerçek sayı aynı tek/çift kategorisindeyse
-            bool isPredictedOdd = predictedNumber % 2 == 1 && predictedNumber > 0;
-            bool isActualOdd = actualNumber % 2 == 1 && actualNumber > 0;
-            
-            if ((isPredictedOdd && isActualOdd) || (!isPredictedOdd && !isActualOdd && predictedNumber != 0 && actualNumber != 0))
-            {
-                return true;
-            }
+            // NOT: Tek/Çift kategorisi kontrolü kaldırıldı.
+            // Sadece direkt sayı eşleşmesi veya komşu sayı kontrolü yapılıyor.
             
             return false;
         }

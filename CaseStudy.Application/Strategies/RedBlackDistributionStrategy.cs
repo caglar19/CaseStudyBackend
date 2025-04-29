@@ -33,7 +33,7 @@ namespace CaseStudy.Application.Strategies
             var random = new Random(DateTime.Now.Millisecond);
             
             // Son 50 sayıdaki kırmızı/siyah dağılımını incele
-            var recentNumbers = numbers.Take(Math.Min(50, numbers.Count)).ToList();
+            var recentNumbers = numbers.Take(Math.Min(500, numbers.Count)).ToList();
             
             // Kırmızı/siyah istatistikleri
             var redCount = recentNumbers.Count(n => _redNumbers.Contains(n)); // Kırmızı sayılar
@@ -113,14 +113,8 @@ namespace CaseStudy.Application.Strategies
                 return true;
             }
             
-            // Kırmızı/siyah kategorisi doğru mu? (Daha esnek bir doğruluk tanımı)
-            bool isPredictedRed = _redNumbers.Contains(predictedNumber);
-            bool isActualRed = _redNumbers.Contains(actualNumber);
-            
-            if ((isPredictedRed && isActualRed) || (!isPredictedRed && !isActualRed && predictedNumber != 0 && actualNumber != 0))
-            {
-                return true;
-            }
+            // NOT: Kırmızı/Siyah kategorisi kontrolü kaldırıldı.
+            // Sadece direkt sayı eşleşmesi veya komşu sayı kontrolü yapılıyor.
             
             return false;
         }

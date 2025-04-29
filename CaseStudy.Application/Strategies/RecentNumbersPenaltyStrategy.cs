@@ -39,13 +39,13 @@ namespace CaseStudy.Application.Strategies
             }
             
             // Son çıkan sayıların listesi
-            var recentNumbers = numbers.Take(10).ToList();
+            var recentNumbers = numbers.Take(500).ToList();
             
             // Son 10 sayıya ceza uygula - en son çıkanlara daha fazla ceza
             for (int i = 0; i < recentNumbers.Count; i++)
             {
                 int num = recentNumbers[i];
-                int penalty = 10 - i; // Son çıkan sayıya 10, bir öncekine 9... ceza uygula
+                int penalty = 500 - i; // Son çıkan sayıya 10, bir öncekine 9... ceza uygula
                 
                 if (candidateWeights.ContainsKey(num))
                 {

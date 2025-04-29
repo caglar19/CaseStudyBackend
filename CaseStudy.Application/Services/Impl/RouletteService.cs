@@ -87,8 +87,8 @@ namespace CaseStudy.Application.Services.Impl
                     await _rouletteCollection.InsertOneAsync(newData);
                 }
 
-                // StrategyManager kullanarak en başarılı strateji ile tahmin yap
-                int prediction = await _strategyManager.PredictNextNumberAsync(initialNumbers);
+                // Tüm stratejilere tahmin yaptır ve en başarılı stratejinin tahmini döndür
+                var (prediction, strategyName) = await _strategyManager.PredictNextNumberAsync(initialNumbers);
                 
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
                 _lastPredictedNumber = prediction;
@@ -97,6 +97,7 @@ namespace CaseStudy.Application.Services.Impl
                 {
                     Success = true,
                     Prediction = prediction,
+                    StrategyName = strategyName,
                     Numbers = initialNumbers
                 };
             }
@@ -172,8 +173,10 @@ namespace CaseStudy.Application.Services.Impl
                 await _strategyManager.UpdatePredictionAccuracyAsync(number);
                 
                 // StrategyManager kullanarak en başarılı strateji ile tahmin yap
-                // PredictNextNumberAsync metodu artık en başarılı stratejiyi kullanacak şekilde güncellendi
-                int prediction = await _strategyManager.PredictNextNumberAsync(rouletteData.Numbers);
+                // PredictNextNumberAsync metodu artık en başarılı stratejiyi ve strateji adını döndürüyor
+                var result = await _strategyManager.PredictNextNumberAsync(rouletteData.Numbers);
+                int prediction = result.prediction;
+                string strategyName = result.strategyName;
                 
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
                 _lastPredictedNumber = prediction;
@@ -182,6 +185,7 @@ namespace CaseStudy.Application.Services.Impl
                 {
                     Success = true,
                     Prediction = prediction,
+                    StrategyName = strategyName,
                     Numbers = rouletteData.Numbers
                 };
             }

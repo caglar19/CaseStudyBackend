@@ -56,6 +56,11 @@ namespace CaseStudy.Application.Models.Roulette
         public int Prediction { get; set; }
         
         /// <summary>
+        /// Tahmin için kullanılan strateji adı
+        /// </summary>
+        public string StrategyName { get; set; } = string.Empty;
+        
+        /// <summary>
         /// Mevcut rulet sayıları
         /// </summary>
         public List<int> Numbers { get; set; } = new List<int>();

@@ -53,15 +53,14 @@ namespace CaseStudy.API.Controllers
         /// <param name="limit">Her strateji için değerlendirilecek son kayıt sayısı</param>
         /// <returns>Her stratejinin ayrı ayrı tahmin sonuçları, 1=doğru, 0=yanlış</returns>
         [HttpGet("strategies/performance")]
-        public async Task<IActionResult> GetStrategyPerformances([FromQuery] int limit = 500)
+        public async Task<IActionResult> GetStrategyPerformances([FromQuery] int limit = 100000)
         {
             try
             {
-                // Sonuçları belli olan tüm kayıtları getir
+                // Sonuçları belli olan TÜM kayıtları getir - Limit kullanımı kaldırıldı
                 var records = await _predictionRecordsCollection
                     .Find(r => r.ActualNumber != null)
                     .SortByDescending(r => r.PredictionDate)
-                    .Limit(limit)
                     .ToListAsync();
                 
                 // Tüm stratejileri bul
@@ -74,7 +73,6 @@ namespace CaseStudy.API.Controllers
                 {
                     var strategyRecords = records.Where(r => r.Strategy == strategy)
                         .OrderByDescending(r => r.PredictionDate)
-                        .Take(limit)
                         .ToList();
                     
                     if (strategyRecords.Count == 0)
@@ -95,9 +93,8 @@ namespace CaseStudy.API.Controllers
                         ExactMatch = r.ActualNumber == r.PredictedNumber ? 1 : 0 // Tam isabeti de ayrıca göster
                     }).ToList();
                     
-                    // Son 500 tahmin sonuçları dizisi (1 veya 0) - grafik çizmek için kolay format
+                    // Tüm tahmin sonuçları dizisi (1 veya 0) - grafik çizmek için kolay format
                     var resultArray = strategyRecords
-                        .Take(500)
                         .Select(r => r.IsCorrect == true ? 1 : 0)
                         .ToArray();
                     

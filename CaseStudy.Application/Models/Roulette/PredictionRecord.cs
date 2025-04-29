@@ -37,11 +37,6 @@ namespace CaseStudy.Application.Models.Roulette
         public bool? IsCorrect { get; set; }
         
         /// <summary>
-        /// Tahminden önceki son 5 sayı listesi (tahmin bağlamı)
-        /// </summary>
-        public int[] Context { get; set; } = Array.Empty<int>();
-        
-        /// <summary>
         /// Tahmin için kullanılan strateji
         /// </summary>
         public string Strategy { get; set; } = "MultiTimeScaleAnalysis";
