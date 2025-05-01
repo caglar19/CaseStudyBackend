@@ -401,12 +401,13 @@ namespace CaseStudy.Application.Strategies
                     // Tahminin komşuları
                     int[] neighbors = record.Neighbors;
                     
-                    // Strateji ile tahmin doğruluğunu kontrol et
-                    bool isCorrect = strategy.CheckPredictionAccuracy(record.PredictedNumber, actualNumber, neighbors);
+                    // MERKEZİ DOĞRULUK KONTROLÜ - tüm stratejiler için aynı mantık
+                    // Gerçek sayı komşular içinde mi? (komşular tahmin edilen sayının kendisini de içerir)
+                    bool isCorrect = neighbors != null && neighbors.Contains(actualNumber);
                     
                     // İşlemleri atomik olarak yapmak için doğrudan kayıtları güncelle
                     record.ActualNumber = actualNumber;
-                    record.IsCorrect = isCorrect || neighbors.Contains(actualNumber); // tam doğru veya komşu sayı
+                    record.IsCorrect = isCorrect; // Merkezi doğruluk kontrolü - strateji mantığından bağımsız
                     
                     // Kaydı güncelle
                     await _predictionRecordsCollection.ReplaceOneAsync(
