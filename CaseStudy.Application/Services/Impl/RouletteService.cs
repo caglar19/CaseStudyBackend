@@ -88,7 +88,7 @@ namespace CaseStudy.Application.Services.Impl
                 }
 
                 // Tüm stratejilere tahmin yaptır ve en başarılı stratejinin tahmini döndür
-                var (prediction, strategyName) = await _strategyManager.PredictNextNumberAsync(initialNumbers);
+                var (prediction, strategyName, topStrategies) = await _strategyManager.PredictNextNumberAsync(initialNumbers);
                 
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
                 _lastPredictedNumber = prediction;
@@ -98,6 +98,7 @@ namespace CaseStudy.Application.Services.Impl
                     Success = true,
                     Prediction = prediction,
                     StrategyName = strategyName,
+                    TopStrategies = topStrategies,
                     Numbers = initialNumbers
                 };
             }
@@ -173,10 +174,11 @@ namespace CaseStudy.Application.Services.Impl
                 await _strategyManager.UpdatePredictionAccuracyAsync(number);
                 
                 // StrategyManager kullanarak en başarılı strateji ile tahmin yap
-                // PredictNextNumberAsync metodu artık en başarılı stratejiyi ve strateji adını döndürüyor
+                // PredictNextNumberAsync metodu artık en başarılı stratejiyi, strateji adını ve en iyi 3 stratejiyi döndürüyor
                 var result = await _strategyManager.PredictNextNumberAsync(rouletteData.Numbers);
                 int prediction = result.prediction;
                 string strategyName = result.strategyName;
+                var topStrategies = result.topStrategies;
                 
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
                 _lastPredictedNumber = prediction;
@@ -186,6 +188,7 @@ namespace CaseStudy.Application.Services.Impl
                     Success = true,
                     Prediction = prediction,
                     StrategyName = strategyName,
+                    TopStrategies = topStrategies,
                     Numbers = rouletteData.Numbers
                 };
             }

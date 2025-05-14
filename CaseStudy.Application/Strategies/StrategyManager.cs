@@ -104,18 +104,36 @@ namespace CaseStudy.Application.Strategies
         /// Tüm stratejileri kullanarak bir sonraki sayıyı tahmin eder ve veritabanına kaydeder
         /// </summary>
         /// <param name="numbers">Rulet sayıları</param>
-        /// <returns>Tahmin edilen sayı ve strateji adı tupple</returns>
-        public async Task<(int prediction, string strategyName)> PredictNextNumberAsync(List<int> numbers)
+        /// <returns>Tahmin edilen sayı, strateji adı ve en iyi 3 strateji</returns>
+        public async Task<(int prediction, string strategyName, List<Models.Roulette.TopStrategyPrediction> topStrategies)> PredictNextNumberAsync(List<int> numbers)
         {
             if (numbers == null || numbers.Count == 0)
             {
-                return (-1, "Veri Yok");
+                return (-1, "Veri Yok", new List<Models.Roulette.TopStrategyPrediction>());
             }
             
             try
             {
                 // Tüm stratejilere tahmin yaptır ve veritabanına kaydet
                 var allPredictions = await PredictWithAllStrategiesInternalAsync(numbers);
+                
+                // En başarılı 3 stratejiyi bul
+                var topStrategies = await FindTopPerformingStrategiesAsync(3);
+                var topStrategyPredictions = new List<Models.Roulette.TopStrategyPrediction>();
+                
+                // Top strategy predictions oluştur
+                foreach (var (strategyName, successRate) in topStrategies)
+                {
+                    if (allPredictions.ContainsKey(strategyName))
+                    {
+                        topStrategyPredictions.Add(new Models.Roulette.TopStrategyPrediction
+                        {
+                            StrategyName = strategyName,
+                            PredictedNumber = allPredictions[strategyName],
+                            SuccessRate = Math.Round(successRate * 100, 2) // Yüzde olarak başarı oranı
+                        });
+                    }
+                }
                 
                 // En başarılı stratejiyi bul
                 var bestStrategy = await FindBestPerformingStrategyAsync();
@@ -128,7 +146,7 @@ namespace CaseStudy.Application.Strategies
                     // Tüm tahminler arasından en başarılı stratejinin tahmini döndür
                     if (allPredictions.ContainsKey(bestStrategy.StrategyName))
                     {
-                        return (allPredictions[bestStrategy.StrategyName], bestStrategy.StrategyName);
+                        return (allPredictions[bestStrategy.StrategyName], bestStrategy.StrategyName, topStrategyPredictions);
                     }
                 }
                 else 
@@ -136,16 +154,15 @@ namespace CaseStudy.Application.Strategies
                     Console.WriteLine("En başarılı strateji bulunamadı!");
                 }
                 
-                // Eğer en başarılı strateji yoksa veya tahmini yoksa, ağırlıklı tahmin döndür
+                // En başarılı strateji bulunamadığında ağırlıklı tahmin kullan
                 int weightedPrediction = await GetWeightedPredictionAsync(allPredictions);
-                return (weightedPrediction, "Ağırlıklı Tahmin");
+                return (weightedPrediction, "Ağırlıklı Tahmin", topStrategyPredictions);
             }
             catch (Exception ex)
             {
-                // Hata durumunda loglama yap ve rastgele bir sayı döndür
-                Console.WriteLine($"Tahmin hatası: {ex.Message}");
-                return (new Random().Next(0, 37), "Rastgele (Hata Nedeniyle)"); 
-            }
+                Console.WriteLine($"Tahmin yaparken hata: {ex.Message}");
+                return (-1, "Hata", new List<Models.Roulette.TopStrategyPrediction>());
+            }  
         }
         
         /// <summary>
@@ -281,6 +298,39 @@ namespace CaseStudy.Application.Strategies
             catch
             {
                 return null;
+            }
+        }
+        
+        /// <summary>
+        /// Mevcut verilere göre en başarılı N stratejiyi bulur
+        /// </summary>
+        /// <param name="count">Kaç strateji döndürüleceği</param>
+        /// <returns>En başarılı stratejilerin listesi</returns>
+        private async Task<List<(string strategyName, double successRate)>> FindTopPerformingStrategiesAsync(int count)
+        {
+            try
+            {
+                // Tüm stratejilerin performans kayıtlarını getir
+                var performances = await _strategyPerformanceCollection
+                    .Find(_ => true)
+                    .ToListAsync();
+                
+                if (performances == null || performances.Count == 0)
+                    return new List<(string, double)>();
+                
+                // En yüksek başarı oranına sahip stratejileri bul
+                var topPerformers = performances
+                    .Where(p => p.UsageCount > 0) // sadece en az 1 kez kullanılmış olmalı (sıfıra bölünme hatası önlemek için)
+                    .Select(p => (p.StrategyName, SuccessRate: (double)p.CorrectPredictionCount / p.UsageCount))
+                    .OrderByDescending(p => p.SuccessRate) // başarı oranına göre sırala
+                    .Take(count)
+                    .ToList();
+                
+                return topPerformers;
+            }
+            catch
+            {
+                return new List<(string, double)>();
             }
         }
 

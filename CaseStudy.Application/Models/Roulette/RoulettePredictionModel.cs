@@ -61,6 +61,11 @@ namespace CaseStudy.Application.Models.Roulette
         public string StrategyName { get; set; } = string.Empty;
         
         /// <summary>
+        /// En iyi 3 stratejinin tahminleri
+        /// </summary>
+        public List<TopStrategyPrediction> TopStrategies { get; set; } = new List<TopStrategyPrediction>();
+        
+        /// <summary>
         /// Mevcut rulet sayıları
         /// </summary>
         public List<int> Numbers { get; set; } = new List<int>();
@@ -81,6 +86,27 @@ namespace CaseStudy.Application.Models.Roulette
             "Dağılım Analizi: Çift/tek, kırmızı/siyah, yüksek/düşük",
             "Tekrarlanma Aralığı Analizi: Sayıların ne sıklıkla geldiği"
         };
+    }
+    
+    /// <summary>
+    /// En iyi stratejilerin tahminlerini içeren model
+    /// </summary>
+    public class TopStrategyPrediction
+    {
+        /// <summary>
+        /// Tahmini sayı
+        /// </summary>
+        public int PredictedNumber { get; set; }
+        
+        /// <summary>
+        /// Strateji adı
+        /// </summary>
+        public string StrategyName { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Stratejinin başarı oranı (yüzde olarak)
+        /// </summary>
+        public double SuccessRate { get; set; }
     }
     
     /// <summary>
