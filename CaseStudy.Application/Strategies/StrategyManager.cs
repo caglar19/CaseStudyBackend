@@ -56,7 +56,8 @@ namespace CaseStudy.Application.Strategies
                     new HybridPredictionStrategy(),
                     new MotionVectorStrategy(),
                     new GoldenRatioStrategy(),
-                    new IntuitiveAnalysisStrategy()
+                    new IntuitiveAnalysisStrategy(),
+                    new OptimalWheelPositionStrategy() // Yeni eklenen optimal çark pozisyon stratejisi
                 };
                 
                 // Strateji performans kayıtlarını kontrol et ve yoksa oluştur
@@ -130,7 +131,7 @@ namespace CaseStudy.Application.Strategies
                         {
                             StrategyName = strategyName,
                             PredictedNumber = allPredictions[strategyName],
-                            SuccessRate = Math.Round(successRate * 100, 2) // Yüzde olarak başarı oranı
+                            SuccessRate = Math.Round(successRate * 100, 3) // Yüzde olarak başarı oranı
                         });
                     }
                 }

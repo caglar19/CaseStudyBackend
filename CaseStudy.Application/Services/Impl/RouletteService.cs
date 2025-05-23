@@ -180,6 +180,9 @@ namespace CaseStudy.Application.Services.Impl
                 string strategyName = result.strategyName;
                 var topStrategies = result.topStrategies;
                 
+                // Optimal Çark Pozisyon Stratejisi'nin tahminini hesapla ve topStrategies listesine ekle
+                AddOptimalWheelPositionPredictionToTopStrategies(topStrategies, rouletteData.Numbers);
+                
                 // Son tahmin edilen sayıyı sakla (doğruluk takibi için)
                 _lastPredictedNumber = prediction;
                 
@@ -276,6 +279,34 @@ namespace CaseStudy.Application.Services.Impl
                     Numbers = new List<int>(),
                     NumbersCount = 0
                 });
+            }
+        }
+        
+        /// <summary>
+        /// Optimal Çark Pozisyon Stratejisi'nin tahminini hesaplar ve topStrategies listesine ekler
+        /// </summary>
+        /// <param name="topStrategies">En iyi stratejilerin tahmin sonuçları</param>
+        /// <param name="numbers">Rulet sayıları</param>
+        private void AddOptimalWheelPositionPredictionToTopStrategies(List<TopStrategyPrediction> topStrategies, List<int> numbers)
+        {
+            try
+            {
+                // OptimalWheelPositionStrategy'yi bul ve çalıştır
+                var optimalStrategy = new OptimalWheelPositionStrategy();
+                int optimalPrediction = optimalStrategy.PredictNextNumber(numbers);
+                
+                // TopStrategies listesine ekle
+                topStrategies.Add(new TopStrategyPrediction
+                {
+                    PredictedNumber = optimalPrediction,
+                    StrategyName = "OptimalWheelPositionStrategy",
+                    // Strateji adı StrategyManager'daki adla aynı olmalı ki performans hesaplanabilsin
+                    SuccessRate = 0 // StrategyManager tarafından değer veritabanından gelecek
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Optimal çark pozisyon stratejisi eklenirken hata: {ex.Message}");
             }
         }
     }
